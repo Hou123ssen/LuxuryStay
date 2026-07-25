@@ -31,6 +31,14 @@ class BookingController extends Controller
         ]);
 
         // ✅ تحقق من overlap — فقط الحجوزات المقبولة تمنع الحجز
+        $property = Property::findOrFail($request->property_id);
+
+        if ($property->user_id === Auth::id()) {
+            return response()->json([
+                'message' => 'You cannot book your own property.',
+            ], 403);
+        }
+
         $overlap = Booking::where('property_id', $request->property_id)
             ->where('status', 'accepted')
             ->where(function ($q) use ($request) {
@@ -57,7 +65,6 @@ class BookingController extends Controller
             'status'      => 'pending',
         ]);
 
-        $property = Property::findOrFail($request->property_id);
         $booker   = Auth::user();
 
         // ✅ notification للمالك فقط إذا كان غير الحاجز
