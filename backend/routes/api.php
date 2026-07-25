@@ -29,7 +29,6 @@ Route::middleware('auth:sanctum')->group(function () {
     // API ROUTES FOR BOOKINGS :
     Route::get('/bookings', [BookingController::class, 'index']);
     Route::post('/bookings', [BookingController::class, 'store'])->middleware(('auth:sanctum'));
-    Route::put('/bookings/{id}', [BookingController::class, 'update']);
     Route::delete('/bookings/{id}', [BookingController::class, 'destroy']);
 
     // ✅ Accept & Reject
