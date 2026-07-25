@@ -115,6 +115,57 @@ class AuthApiTest extends TestCase
             ->assertJsonMissingPath('token');
     }
 
+    public function test_too_many_failed_login_attempts_returns_too_many_requests(): void
+    {
+        User::factory()->create([
+            'email' => 'limited-login@example.com',
+            'password' => Hash::make('password123'),
+        ]);
+
+        for ($attempt = 1; $attempt <= 5; $attempt++) {
+            $this
+                ->withServerVariables(['REMOTE_ADDR' => '10.10.10.10'])
+                ->postJson('/api/login', [
+                    'email' => 'limited-login@example.com',
+                    'password' => 'wrong-password',
+                ])
+                ->assertUnauthorized();
+        }
+
+        $this
+            ->withServerVariables(['REMOTE_ADDR' => '10.10.10.10'])
+            ->postJson('/api/login', [
+                'email' => 'limited-login@example.com',
+                'password' => 'wrong-password',
+            ])
+            ->assertStatus(429);
+    }
+
+    public function test_too_many_register_attempts_returns_too_many_requests(): void
+    {
+        for ($attempt = 1; $attempt <= 3; $attempt++) {
+            $this
+                ->withServerVariables(['REMOTE_ADDR' => '10.10.10.11'])
+                ->postJson('/api/register', [
+                    'name' => 'Limited Guest '.$attempt,
+                    'email' => 'limited-register-'.$attempt.'@example.com',
+                    'password' => 'password123',
+                    'password_confirmation' => 'password123',
+                ])
+                ->assertCreated();
+        }
+
+        $this
+            ->withServerVariables(['REMOTE_ADDR' => '10.10.10.11'])
+            ->postJson('/api/register', [
+                'name' => 'Limited Guest 4',
+                'email' => 'limited-register-4@example.com',
+                'password' => 'password123',
+                'password_confirmation' => 'password123',
+            ])
+            ->assertStatus(429);
+    }
+
     public function test_logout_revokes_current_token(): void
     {
         $user = User::factory()->create();
