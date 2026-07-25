@@ -127,6 +127,19 @@ class BookingController extends Controller
             return response()->json(['error' => 'Only pending bookings can be accepted.'], 422);
         }
 
+        $overlap = Booking::where('property_id', $booking->property_id)
+            ->where('id', '!=', $booking->id)
+            ->where('status', 'accepted')
+            ->where('start_date', '<', $booking->end_date)
+            ->where('end_date', '>', $booking->start_date)
+            ->exists();
+
+        if ($overlap) {
+            return response()->json([
+                'message' => 'This property is already booked for the selected dates.',
+            ], 409);
+        }
+
         $booking->update(['status' => 'accepted']);
 
         // notification للحاجز — تم القبول
