@@ -50,6 +50,7 @@ export const authService = {
 export const propertyService = {
   list:   (params)     => api.get('/properties', { params }),
   get:    (id)         => api.get(`/properties/${id}`),
+  availability: (id)   => api.get(`/properties/${id}/availability`),
   create: (data)       => api.post('/properties', data),
   update: (id, data)   => api.put(`/properties/${id}`, data),
   delete: (id)         => api.delete(`/properties/${id}`),

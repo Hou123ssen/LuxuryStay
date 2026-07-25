@@ -1,12 +1,24 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { addDays, differenceInCalendarDays } from 'date-fns';
-import { bookingService } from '../../services/api';
+import { bookingService, propertyService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { FiCalendar, FiMinus, FiPlus } from 'react-icons/fi';
+import { FiCalendar } from 'react-icons/fi';
+
+function parseDateStringAsLocalDate(value) {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function formatDateAsLocalString(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 export default function BookingCalendar({ property }) {
   const { isAuth } = useAuth();
@@ -14,21 +26,81 @@ export default function BookingCalendar({ property }) {
   const [startDate, setStart] = useState(null);
   const [endDate,   setEnd]   = useState(null);
   const [loading,   setLoad]  = useState(false);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [availabilityFailed, setAvailabilityFailed] = useState(false);
+  const [unavailableDateStrings, setUnavailableDateStrings] = useState([]);
+
+  const unavailableDateSet = useMemo(
+    () => new Set(unavailableDateStrings),
+    [unavailableDateStrings]
+  );
+  const unavailableDates = useMemo(
+    () => unavailableDateStrings.map(parseDateStringAsLocalDate),
+    [unavailableDateStrings]
+  );
 
   const nights = startDate && endDate ? differenceInCalendarDays(endDate, startDate) : 0;
   const total  = nights * Number(property.price_per_night);
 
-  const handleChange = ([start, end]) => { setStart(start); setEnd(end); };
+  useEffect(() => {
+    if (!property?.id) return;
+
+    let cancelled = false;
+    setAvailabilityLoading(true);
+    setAvailabilityFailed(false);
+
+    propertyService.availability(property.id)
+      .then((res) => {
+        if (cancelled) return;
+        setUnavailableDateStrings(res.data?.unavailable_dates || []);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setUnavailableDateStrings([]);
+        setAvailabilityFailed(true);
+      })
+      .finally(() => {
+        if (!cancelled) setAvailabilityLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [property?.id]);
+
+  const rangeIncludesUnavailableNight = (start, end) => {
+    if (!start || !end) return false;
+
+    for (let date = new Date(start); date < end; date = addDays(date, 1)) {
+      if (unavailableDateSet.has(formatDateAsLocalString(date))) return true;
+    }
+
+    return false;
+  };
+
+  const handleChange = ([start, end]) => {
+    if (start && end && rangeIncludesUnavailableNight(start, end)) {
+      toast.error('Selected dates include unavailable nights.');
+      setStart(start);
+      setEnd(null);
+      return;
+    }
+
+    setStart(start);
+    setEnd(end);
+  };
 
   const handleBook = async () => {
     if (!isAuth) { toast.error('Please sign in to book'); navigate('/login'); return; }
     if (!startDate || !endDate) { toast.error('Please select check-in and check-out dates'); return; }
+    if (rangeIncludesUnavailableNight(startDate, endDate)) {
+      toast.error('Selected dates include unavailable nights.');
+      return;
+    }
     setLoad(true);
     try {
       await bookingService.create({
         property_id: property.id,
-        start_date:  startDate.toISOString().split('T')[0],
-        end_date:    endDate.toISOString().split('T')[0],
+        start_date:  formatDateAsLocalString(startDate),
+        end_date:    formatDateAsLocalString(endDate),
       });
       toast.success('Booking confirmed! 🎉');
       navigate('/bookings');
@@ -62,9 +134,17 @@ export default function BookingCalendar({ property }) {
           endDate={endDate}
           selectsRange
           minDate={new Date()}
+          excludeDates={unavailableDates}
           inline
           monthsShown={1}
         />
+        <p className="text-xs text-cream/35 mt-2">
+          {availabilityLoading
+            ? 'Checking availability...'
+            : availabilityFailed
+              ? 'Availability could not be loaded. Booking will still be checked before confirmation.'
+              : 'Unavailable dates are disabled.'}
+        </p>
       </div>
 
       {/* Summary */}
