@@ -1,0 +1,74 @@
+# ============================================
+# Backend .gitignore (Laravel + Vite)
+# ============================================
+
+# Environment & secrets (NEVER commit)
+.env
+.env.backup
+.env.production
+.env.local
+.env.*.local
+.env.development
+.env.testing
+
+# Composer dependencies
+/vendor
+/auth.json
+
+# NPM / Node dependencies
+/node_modules
+
+# Laravel storage & logs
+/storage/*.key
+/storage/pail
+/storage/app/public/*
+!/storage/app/public/.gitignore
+/storage/framework/cache/data/*
+!/storage/framework/cache/data/.gitignore
+/storage/framework/sessions/*
+!/storage/framework/sessions/.gitignore
+/storage/framework/testing/*
+!/storage/framework/testing/.gitignore
+/storage/framework/views/*
+!/storage/framework/views/.gitignore
+/storage/logs/*
+!/storage/logs/.gitignore
+
+# Public build artifacts
+/public/build
+/public/hot
+/public/storage
+
+# SQLite databases
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+
+# Laravel debug / cache
+.phpunit.result.cache
+.phpunit.cache
+.phpactor.json
+_ide_helper.php
+_ide_helper_models.php
+
+# IDE / Editor
+/.cursor/
+/.idea
+/.nova
+/.vscode
+/.zed
+
+# Homestead / Vagrant
+Homestead.json
+Homestead.yaml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Log files
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+

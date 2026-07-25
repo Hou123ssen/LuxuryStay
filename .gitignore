@@ -1,0 +1,40 @@
+# ============================================
+# Root .gitignore for LUXURY_STAY Monorepo
+# ============================================
+
+# OS files
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+*.swo
+*~
+
+# Windows accidental NUL artifact
+/nul
+
+# IDE / Editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.project
+.classpath
+.settings/
+
+# Root-level env files (should be in backend/frontend, but guard here too)
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Temporary folders
+/tmp/
+/temp/
+
