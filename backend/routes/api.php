@@ -15,6 +15,7 @@ use App\Models\Property;
 use Illuminate\Support\Facades\Auth;
 
 Route::get('/user', [AuthController::class, 'me'])->middleware('auth:sanctum');
+Route::get('/properties/{property}/availability', [PropertyController::class, 'availability']);
 
 
 Route::middleware('auth:sanctum')->group(function () {
