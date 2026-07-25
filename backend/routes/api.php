@@ -6,7 +6,6 @@ use App\Http\Controllers\Api\ConversationController;
 use App\Http\Controllers\Api\FavoriteController;
 use App\Http\Controllers\Api\ImageController;
 use App\Http\Controllers\Api\NotificationController;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\Api\PropertyController;
@@ -15,9 +14,7 @@ use App\Models\Booking;
 use App\Models\Property;
 use Illuminate\Support\Facades\Auth;
 
-Route::get('/user', function (Request $request) {
-    return $request->user();
-})->middleware('auth:sanctum');
+Route::get('/user', [AuthController::class, 'me'])->middleware('auth:sanctum');
 
 
 Route::middleware('auth:sanctum')->group(function () {

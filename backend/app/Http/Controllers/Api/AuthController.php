@@ -63,6 +63,13 @@ class AuthController extends Controller
         ]);
     }
 
+    public function me(Request $request)
+    {
+        return response()->json([
+            'user' => $this->userPayload($request->user()),
+        ]);
+    }
+
     private function userPayload(User $user): array
     {
         return [

@@ -166,6 +166,36 @@ class AuthApiTest extends TestCase
             ->assertStatus(429);
     }
 
+    public function test_current_user_returns_safe_user_payload(): void
+    {
+        $user = User::factory()->create([
+            'name' => 'Current Guest',
+            'email' => 'current@example.com',
+        ]);
+        $token = $user->createToken('auth_token');
+
+        $response = $this
+            ->withHeader('Authorization', 'Bearer '.$token->plainTextToken)
+            ->getJson('/api/user');
+
+        $response
+            ->assertOk()
+            ->assertJsonStructure([
+                'user' => [
+                    'id',
+                    'name',
+                    'email',
+                    'role',
+                ],
+            ])
+            ->assertJsonPath('user.id', $user->id)
+            ->assertJsonPath('user.name', 'Current Guest')
+            ->assertJsonPath('user.email', 'current@example.com')
+            ->assertJsonPath('user.role', 'user')
+            ->assertJsonMissingPath('user.password')
+            ->assertJsonMissingPath('user.remember_token');
+    }
+
     public function test_logout_revokes_current_token(): void
     {
         $user = User::factory()->create();
