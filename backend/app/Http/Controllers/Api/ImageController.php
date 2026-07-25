@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Image;
+use App\Models\Property;
 use Illuminate\Http\Request;
 
 class ImageController extends Controller
@@ -15,6 +16,14 @@ class ImageController extends Controller
             'images.*' => 'image|mimes:jpg,jpeg,png,webp|max:2048',
             'property_id' => 'required|integer|exists:properties,id',
         ]);
+
+        $property = Property::findOrFail($request->property_id);
+
+        if ($property->user_id !== $request->user()->id) {
+            return response()->json([
+                'message' => 'This action is unauthorized.',
+            ], 403);
+        }
 
         $uploadedImages = [];
 
