@@ -90,6 +90,68 @@ class BookingStoreTest extends TestCase
         ]);
     }
 
+    public function test_booking_creation_allows_back_to_back_checkout_and_checkin_dates(): void
+    {
+        $host = User::factory()->create();
+        $guestA = User::factory()->create();
+        $guestB = User::factory()->create();
+        $property = $this->createPropertyFor($host);
+
+        $this->createBookingFor($guestA, $property, [
+            'start_date' => '2026-08-01',
+            'end_date' => '2026-08-03',
+            'status' => 'accepted',
+        ]);
+
+        $this
+            ->actingAs($guestB, 'sanctum')
+            ->postJson('/api/bookings', [
+                'property_id' => $property->id,
+                'start_date' => '2026-08-03',
+                'end_date' => '2026-08-08',
+            ])
+            ->assertCreated();
+
+        $this->assertDatabaseHas('bookings', [
+            'user_id' => $guestB->id,
+            'property_id' => $property->id,
+            'start_date' => '2026-08-03',
+            'end_date' => '2026-08-08',
+            'status' => 'pending',
+        ]);
+    }
+
+    public function test_booking_creation_rejects_real_overlap_with_accepted_booking(): void
+    {
+        $host = User::factory()->create();
+        $guestA = User::factory()->create();
+        $guestB = User::factory()->create();
+        $property = $this->createPropertyFor($host);
+
+        $this->createBookingFor($guestA, $property, [
+            'start_date' => '2026-08-01',
+            'end_date' => '2026-08-03',
+            'status' => 'accepted',
+        ]);
+
+        $this
+            ->actingAs($guestB, 'sanctum')
+            ->postJson('/api/bookings', [
+                'property_id' => $property->id,
+                'start_date' => '2026-08-02',
+                'end_date' => '2026-08-08',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Property is already booked for these dates.');
+
+        $this->assertDatabaseMissing('bookings', [
+            'user_id' => $guestB->id,
+            'property_id' => $property->id,
+            'start_date' => '2026-08-02',
+            'end_date' => '2026-08-08',
+        ]);
+    }
+
     public function test_property_owner_cannot_book_own_property(): void
     {
         $owner = User::factory()->create();
@@ -125,6 +187,18 @@ class BookingStoreTest extends TestCase
             'price_per_night' => 250,
             'city' => 'Marrakech',
             'address' => 'Medina',
+        ], $attributes));
+    }
+
+    private function createBookingFor(User $user, Property $property, array $attributes = [])
+    {
+        return \App\Models\Booking::create(array_merge([
+            'user_id' => $user->id,
+            'property_id' => $property->id,
+            'start_date' => '2026-08-01',
+            'end_date' => '2026-08-03',
+            'total_price' => 500,
+            'status' => 'pending',
         ], $attributes));
     }
 }
