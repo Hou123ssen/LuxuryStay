@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Booking;
 use App\Models\Notification;
 use App\Models\Property;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
 
@@ -57,11 +58,20 @@ class BookingController extends Controller
         }
 
         // ✅ إنشاء الحجز بحالة pending
+        $nights = Carbon::parse($request->start_date)->diffInDays(Carbon::parse($request->end_date));
+
+        if ($nights < 1) {
+            return response()->json([
+                'message' => 'The booking must be at least one night.',
+            ], 422);
+        }
+
         $booking = Booking::create([
             'user_id'     => Auth::id(),
             'property_id' => $request->property_id,
             'start_date'  => $request->start_date,
             'end_date'    => $request->end_date,
+            'total_price' => $nights * $property->price_per_night,
             'status'      => 'pending',
         ]);
 
