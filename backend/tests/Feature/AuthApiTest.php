@@ -35,6 +35,7 @@ class AuthApiTest extends TestCase
             ->assertJsonPath('message', 'User registered successfully')
             ->assertJsonPath('user.name', 'Luxury Guest')
             ->assertJsonPath('user.email', 'luxury.guest@gmail.com')
+            ->assertJsonPath('user.role', 'user')
             ->assertJsonMissingPath('user.password')
             ->assertJsonMissingPath('user.remember_token');
 
@@ -42,6 +43,31 @@ class AuthApiTest extends TestCase
         $this->assertDatabaseHas('users', [
             'email' => 'luxury.guest@gmail.com',
             'role' => 'user',
+        ]);
+    }
+
+    public function test_register_ignores_client_submitted_role(): void
+    {
+        $response = $this->postJson('/api/register', [
+            'name' => 'Role Injection Guest',
+            'email' => 'role.injection@gmail.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+            'role' => 'admin',
+        ]);
+
+        $response
+            ->assertCreated()
+            ->assertJsonPath('user.email', 'role.injection@gmail.com')
+            ->assertJsonPath('user.role', 'user');
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'role.injection@gmail.com',
+            'role' => 'user',
+        ]);
+        $this->assertDatabaseMissing('users', [
+            'email' => 'role.injection@gmail.com',
+            'role' => 'admin',
         ]);
     }
 
@@ -115,6 +141,7 @@ class AuthApiTest extends TestCase
             ->assertJsonPath('message', 'Login successful')
             ->assertJsonPath('user.id', $user->id)
             ->assertJsonPath('user.email', 'returning@example.com')
+            ->assertJsonPath('user.role', 'user')
             ->assertJsonMissingPath('user.password')
             ->assertJsonMissingPath('user.remember_token');
 
