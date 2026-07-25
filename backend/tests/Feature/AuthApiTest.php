@@ -15,7 +15,7 @@ class AuthApiTest extends TestCase
     {
         $response = $this->postJson('/api/register', [
             'name' => 'Luxury Guest',
-            'email' => 'guest@example.com',
+            'email' => 'luxury.guest@gmail.com',
             'password' => 'password123',
             'password_confirmation' => 'password123',
         ]);
@@ -34,13 +34,13 @@ class AuthApiTest extends TestCase
             ])
             ->assertJsonPath('message', 'User registered successfully')
             ->assertJsonPath('user.name', 'Luxury Guest')
-            ->assertJsonPath('user.email', 'guest@example.com')
+            ->assertJsonPath('user.email', 'luxury.guest@gmail.com')
             ->assertJsonMissingPath('user.password')
             ->assertJsonMissingPath('user.remember_token');
 
         $this->assertNotEmpty($response->json('token'));
         $this->assertDatabaseHas('users', [
-            'email' => 'guest@example.com',
+            'email' => 'luxury.guest@gmail.com',
             'role' => 'user',
         ]);
     }
@@ -61,6 +61,30 @@ class AuthApiTest extends TestCase
                 'email',
                 'password',
             ]);
+    }
+
+    public function test_register_rejects_invalid_email_formats(): void
+    {
+        $emails = [
+            'user@koko',
+            'usergmail.com',
+            'user@',
+            '@gmail.com',
+            'not-an-email',
+        ];
+
+        foreach ($emails as $index => $email) {
+            $this
+                ->withServerVariables(['REMOTE_ADDR' => '10.10.20.'.($index + 1)])
+                ->postJson('/api/register', [
+                    'name' => 'Invalid Email Guest',
+                    'email' => $email,
+                    'password' => 'password123',
+                    'password_confirmation' => 'password123',
+                ])
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors(['email']);
+        }
     }
 
     public function test_login_returns_token_and_user(): void
@@ -148,7 +172,7 @@ class AuthApiTest extends TestCase
                 ->withServerVariables(['REMOTE_ADDR' => '10.10.10.11'])
                 ->postJson('/api/register', [
                     'name' => 'Limited Guest '.$attempt,
-                    'email' => 'limited-register-'.$attempt.'@example.com',
+                    'email' => 'limited.register.'.$attempt.'@gmail.com',
                     'password' => 'password123',
                     'password_confirmation' => 'password123',
                 ])
@@ -159,7 +183,7 @@ class AuthApiTest extends TestCase
             ->withServerVariables(['REMOTE_ADDR' => '10.10.10.11'])
             ->postJson('/api/register', [
                 'name' => 'Limited Guest 4',
-                'email' => 'limited-register-4@example.com',
+                'email' => 'limited.register.4@gmail.com',
                 'password' => 'password123',
                 'password_confirmation' => 'password123',
             ])
