@@ -87,7 +87,7 @@ class PropertyController extends Controller
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
-        $request->validate([
+        $validated = $request->validate([
             'title'           => 'sometimes|string|max:255',
             'description'     => 'sometimes|string',
             'type'            => 'sometimes|in:apartment,hotel,residence',
@@ -96,7 +96,7 @@ class PropertyController extends Controller
             'address'         => 'sometimes|string',
         ]);
 
-        $property->update($request->all());
+        $property->update($validated);
 
         return response()->json(['data' => $property]);
     }
