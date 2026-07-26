@@ -17,6 +17,7 @@ export default function Chat() {
   const [loading,        setLoading]        = useState(true);
   const [loadError,      setLoadError]      = useState('');
   const [sending,        setSending]        = useState(false);
+  const [isStartingCall, setIsStartingCall] = useState(false);
   const [mobileView,     setMobileView]     = useState('list');
   const bottomRef = useRef(null);
   const pollRef   = useRef(null);
@@ -152,6 +153,26 @@ export default function Chat() {
       setNewMsg(text);
     }
     setSending(false);
+  };
+
+  const startCall = async () => {
+    if (!activeConv?.id || isStartingCall) return;
+
+    setIsStartingCall(true);
+    try {
+      const res = await chatService.createCallSession(activeConv.id);
+      const callSession = res.data?.data || res.data;
+
+      if (!callSession?.id) throw new Error('Call session missing id.');
+
+      navigate(`/call?conversation_id=${activeConv.id}&call_session_id=${callSession.id}`, {
+        state: { callSession },
+      });
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Unable to start call. Please try again.');
+    } finally {
+      setIsStartingCall(false);
+    }
   };
 
   // ── helpers ────────────────────────────────────────────────────────────────
@@ -305,12 +326,13 @@ export default function Chat() {
               </div>
               <button
                 type="button"
-                onClick={() => navigate(`/call?conversation_id=${activeConv.id}`)}
-                className="ml-auto flex items-center gap-1.5 rounded-full border border-gold/25 px-3 py-2 text-xs text-gold/80 transition-colors hover:border-gold hover:text-gold"
+                onClick={startCall}
+                disabled={isStartingCall}
+                className="ml-auto flex items-center gap-1.5 rounded-full border border-gold/25 px-3 py-2 text-xs text-gold/80 transition-colors hover:border-gold hover:text-gold disabled:cursor-wait disabled:opacity-60"
                 aria-label="Start audio call"
               >
                 <FiPhone size={13} />
-                <span className="hidden sm:inline">Call</span>
+                <span className="hidden sm:inline">{isStartingCall ? 'Preparing...' : 'Call'}</span>
               </button>
             </div>
 

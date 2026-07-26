@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   FiChevronLeft,
   FiMic,
@@ -14,13 +14,18 @@ import { chatService } from '../api/chatApi';
 
 export default function AudioCall() {
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const conversationId = searchParams.get('conversation_id');
+  const callSessionId = searchParams.get('call_session_id');
   const [conversation, setConversation] = useState(null);
+  const [callSession, setCallSession] = useState(location.state?.callSession || null);
   const [loading, setLoading] = useState(true);
+  const [isLoadingCallSession, setIsLoadingCallSession] = useState(!location.state?.callSession);
+  const [isLeaving, setIsLeaving] = useState(false);
+  const [callError, setCallError] = useState('');
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
-  const [status] = useState('Calling...');
 
   useEffect(() => {
     let active = true;
@@ -47,6 +52,33 @@ export default function AudioCall() {
     return () => { active = false; };
   }, [conversationId]);
 
+  useEffect(() => {
+    let active = true;
+
+    (async () => {
+      if (callSession || !conversationId) {
+        setIsLoadingCallSession(false);
+        return;
+      }
+
+      setIsLoadingCallSession(true);
+      setCallError('');
+
+      try {
+        const res = await chatService.createCallSession(conversationId);
+        const session = res.data?.data || res.data;
+
+        if (active) setCallSession(session);
+      } catch {
+        if (active) setCallError('Unable to start call. Please try again.');
+      } finally {
+        if (active) setIsLoadingCallSession(false);
+      }
+    })();
+
+    return () => { active = false; };
+  }, [callSession, conversationId, callSessionId]);
+
   const participant = conversation?.other_user;
   const participantName = participant?.name || 'Guest';
   const participantEmail = participant?.email || '';
@@ -58,7 +90,18 @@ export default function AudioCall() {
       .join(' - ');
   }, [conversation]);
 
-  const backToChat = () => {
+  const backToChat = async () => {
+    if (isLeaving) return;
+
+    setIsLeaving(true);
+    try {
+      if (callSession?.id && callSession.status !== 'ended') {
+        await chatService.endCallSession(callSession.id);
+      }
+    } catch (err) {
+      console.error('Failed to end call session:', err);
+    }
+
     if (conversationId) {
       navigate(`/chat?conversation_id=${conversationId}`);
       return;
@@ -66,6 +109,9 @@ export default function AudioCall() {
 
     navigate('/chat');
   };
+
+  const status = callError
+    || (isLeaving ? 'Ending call...' : isLoadingCallSession ? 'Preparing secure call...' : callSession?.status === 'ended' ? 'Ended' : callSession ? 'Call ready' : 'Calling...');
 
   const initial = participantName?.[0]?.toUpperCase() || '?';
 
@@ -77,12 +123,13 @@ export default function AudioCall() {
 
       <div className="relative z-10 flex h-[100dvh] flex-col px-5 py-4 sm:px-8 sm:py-6">
         <header className="flex shrink-0 items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={backToChat}
-            className="flex h-11 w-11 items-center justify-center rounded-full border border-gold/20 bg-white/5 text-cream/70 transition-colors hover:border-gold/50 hover:text-gold"
-            aria-label="Back to chat"
-          >
+            <button
+              type="button"
+              onClick={backToChat}
+              disabled={isLeaving}
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-gold/20 bg-white/5 text-cream/70 transition-colors hover:border-gold/50 hover:text-gold"
+              aria-label="Back to chat"
+            >
             <FiChevronLeft size={20} />
           </button>
 
@@ -91,12 +138,13 @@ export default function AudioCall() {
             <p className="mt-1 text-[10px] uppercase tracking-[0.24em] text-cream/35">Private audio call</p>
           </div>
 
-          <button
-            type="button"
-            onClick={backToChat}
-            className="flex h-11 w-11 items-center justify-center rounded-full border border-gold/20 bg-white/5 text-cream/70 transition-colors hover:border-gold/50 hover:text-gold"
-            aria-label="Close call"
-          >
+            <button
+              type="button"
+              onClick={backToChat}
+              disabled={isLeaving}
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-gold/20 bg-white/5 text-cream/70 transition-colors hover:border-gold/50 hover:text-gold"
+              aria-label="Close call"
+            >
             <FiX size={19} />
           </button>
         </header>
@@ -172,6 +220,7 @@ export default function AudioCall() {
             <button
               type="button"
               onClick={backToChat}
+              disabled={isLeaving}
               className="flex flex-col items-center gap-2 rounded-2xl border border-red-500/40 bg-red-500/15 px-3 py-4 text-xs text-red-300 transition-all hover:bg-red-500/25 hover:text-red-200"
             >
               <FiPhoneOff size={24} />

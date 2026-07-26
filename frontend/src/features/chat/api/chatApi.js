@@ -8,4 +8,6 @@ export const chatService = {
 
   getMessages:        (conversationId)  => api.get(`/messages/${conversationId}`),
   sendMessage:        (data)            => api.post('/messages', data),
+  createCallSession:  (conversationId)  => api.post(`/conversations/${conversationId}/call-sessions`),
+  endCallSession:     (callSessionId)   => api.post(`/call-sessions/${callSessionId}/end`),
 };
