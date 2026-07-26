@@ -6,7 +6,12 @@ use Illuminate\Database\Eloquent\Model;
 
 class Conversation extends Model
 {
-    protected $fillable = ['user_one_id', 'user_two_id'];
+    protected $fillable = ['property_id', 'user_one_id', 'user_two_id'];
+
+    public function property()
+    {
+        return $this->belongsTo(Property::class);
+    }
 
     public function userOne()
     {
