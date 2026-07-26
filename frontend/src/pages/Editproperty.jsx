@@ -1,10 +1,46 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { propertyService, imageService } from '../services/api';
+import { propertyService, imageService, STORAGE_URL } from '../services/api';
 import PropertyForm from '../components/property/PropertyForm';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import { FiLock } from 'react-icons/fi';
+
+function resolveImageUrl(image) {
+  if (!image) return '';
+
+  const value =
+    typeof image === 'string'
+      ? image
+      : image.url ||
+        image.full_url ||
+        image.original_url ||
+        image.image_url ||
+        image.path;
+
+  if (!value) return '';
+
+  if (value.startsWith('http')) {
+    return value;
+  }
+
+  return `${STORAGE_URL}/storage/${value.replace(/^\//, '')}`;
+}
+
+function normalizeExistingImage(image, index) {
+  if (typeof image === 'string') {
+    return {
+      id: image,
+      url: resolveImageUrl(image),
+    };
+  }
+
+  return {
+    ...image,
+    id: image.id ?? image.path ?? index,
+    url: resolveImageUrl(image),
+  };
+}
 
 export default function EditProperty() {
   const { id }         = useParams();
@@ -45,7 +81,7 @@ export default function EditProperty() {
       // 2. Upload new images
       if (newFiles.length > 0) {
         try {
-          await imageService.uploadMany(newFiles, Number(id));
+          await imageService.uploadMultiple(newFiles, Number(id));
         } catch {
           toast.error('Property updated, but some images failed to upload.');
         }
@@ -142,7 +178,9 @@ export default function EditProperty() {
     address:         property?.address     || '',
   };
 
-  const existingImages = property?.images || [];
+  const existingImages = (property?.images || [])
+    .map(normalizeExistingImage)
+    .filter((image) => image.url);
 
   return (
     <PropertyForm
