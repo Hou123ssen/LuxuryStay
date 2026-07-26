@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   FiChevronLeft,
@@ -10,14 +10,19 @@ import {
   FiVolumeX,
   FiX,
 } from 'react-icons/fi';
+import { useAuth } from '../../../app/providers/AuthContext';
 import { chatService } from '../api/chatApi';
+import { useJitsiAudioCall } from '../hooks/useJitsiAudioCall';
 
 export default function AudioCall() {
+  const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
   const conversationId = searchParams.get('conversation_id');
   const callSessionId = searchParams.get('call_session_id');
+  const isDebugJitsi = searchParams.get('debug_jitsi') === '1';
+  const providerContainerRef = useRef(null);
   const [conversation, setConversation] = useState(null);
   const [callSession, setCallSession] = useState(location.state?.callSession || null);
   const [loading, setLoading] = useState(true);
@@ -26,6 +31,21 @@ export default function AudioCall() {
   const [callError, setCallError] = useState('');
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
+  const handleProviderMutedChange = useCallback((muted) => setIsMuted(muted), []);
+
+  const {
+    providerStatus,
+    providerError,
+    isProviderReady,
+    toggleAudio,
+    hangUpProvider,
+  } = useJitsiAudioCall({
+    callSession,
+    parentRef: providerContainerRef,
+    userName: user?.name,
+    debug: isDebugJitsi,
+    onMutedChange: handleProviderMutedChange,
+  });
 
   useEffect(() => {
     let active = true;
@@ -95,6 +115,8 @@ export default function AudioCall() {
 
     setIsLeaving(true);
     try {
+      hangUpProvider();
+
       if (callSession?.id && callSession.status !== 'ended') {
         await chatService.endCallSession(callSession.id);
       }
@@ -110,8 +132,27 @@ export default function AudioCall() {
     navigate('/chat');
   };
 
-  const status = callError
-    || (isLeaving ? 'Ending call...' : isLoadingCallSession ? 'Preparing secure call...' : callSession?.status === 'ended' ? 'Ended' : callSession ? 'Call ready' : 'Calling...');
+  const toggleMute = () => {
+    if (!isProviderReady) return;
+    toggleAudio();
+  };
+
+  const status = callError || providerError
+    || (isLeaving
+      ? 'Leaving...'
+      : isLoadingCallSession
+        ? 'Loading call session'
+        : providerStatus === 'connecting'
+          ? 'Connecting audio...'
+          : providerStatus === 'error'
+            ? 'Audio provider unavailable'
+            : callSession?.status === 'ended'
+              ? 'Ended'
+              : isProviderReady
+                ? 'Call ready'
+                : callSession
+                  ? 'Connecting audio...'
+                  : 'Calling...');
 
   const initial = participantName?.[0]?.toUpperCase() || '?';
 
@@ -120,6 +161,13 @@ export default function AudioCall() {
       style={{ background: 'radial-gradient(circle at top, rgba(201,168,76,0.16), transparent 32%), linear-gradient(145deg, #07070d 0%, #10101f 48%, #050508 100%)' }}>
       <div className="absolute inset-0 opacity-40"
         style={{ background: 'linear-gradient(90deg, transparent 0%, rgba(201,168,76,0.05) 50%, transparent 100%)' }} />
+      <div
+        ref={providerContainerRef}
+        aria-hidden={!isDebugJitsi}
+        className={isDebugJitsi
+          ? 'absolute bottom-4 left-4 z-[360] h-64 w-96 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-gold/30 bg-black shadow-2xl'
+          : 'pointer-events-none absolute -left-[9999px] top-0 h-px w-px overflow-hidden opacity-0'}
+      />
 
       <div className="relative z-10 flex h-[100dvh] flex-col px-5 py-4 sm:px-8 sm:py-6">
         <header className="flex shrink-0 items-center justify-between gap-3">
@@ -193,12 +241,13 @@ export default function AudioCall() {
             style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}>
             <button
               type="button"
-              onClick={() => setIsMuted(value => !value)}
+              onClick={toggleMute}
+              disabled={!isProviderReady || isLeaving}
               className={`flex flex-col items-center gap-2 rounded-2xl border px-3 py-4 text-xs transition-all ${
                 isMuted
                   ? 'border-gold/45 bg-gold/15 text-gold'
                   : 'border-white/10 bg-white/5 text-cream/75 hover:border-gold/35 hover:text-gold'
-              }`}
+              } disabled:cursor-wait disabled:opacity-60`}
             >
               {isMuted ? <FiMicOff size={24} /> : <FiMic size={24} />}
               {isMuted ? 'Unmute' : 'Mute'}
@@ -206,6 +255,7 @@ export default function AudioCall() {
 
             <button
               type="button"
+              // Real audio output device selection is deferred until a dedicated speaker-device flow exists.
               onClick={() => setIsSpeakerOn(value => !value)}
               className={`flex flex-col items-center gap-2 rounded-2xl border px-3 py-4 text-xs transition-all ${
                 isSpeakerOn
