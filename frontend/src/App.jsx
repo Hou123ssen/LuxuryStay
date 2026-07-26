@@ -12,6 +12,7 @@ import PropertyDetail from './pages/PropertyDetail';
 import Bookings       from './pages/Bookings';
 import Favorites      from './pages/Favorites';
 import Chat           from './pages/Chat';
+import AudioCall      from './pages/AudioCall';
 import Notifications  from './pages/Notifications';
 import Profile        from './pages/Profile';
 import AddProperty    from './pages/AddProperty';
@@ -46,6 +47,9 @@ export default function App() {
           } />
           <Route path="/chat" element={
             <ProtectedRoute><Chat /></ProtectedRoute>
+          } />
+          <Route path="/call" element={
+            <ProtectedRoute><AudioCall /></ProtectedRoute>
           } />
           <Route path="/notifications" element={
             <ProtectedRoute><Notifications /></ProtectedRoute>

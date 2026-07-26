@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { chatService } from '../services/api';
 import { format } from 'date-fns';
-import { FiSend, FiMessageCircle, FiSearch, FiChevronLeft } from 'react-icons/fi';
+import { FiSend, FiMessageCircle, FiSearch, FiChevronLeft, FiPhone } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 
@@ -290,7 +290,7 @@ export default function Chat() {
                 style={{ background: 'rgba(201,168,76,0.15)', color: 'var(--gold)' }}>
                 {getAvatar(getOtherUser(activeConv)?.name)}
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <h3 className="text-sm font-medium text-cream">
                   {getOtherUser(activeConv)?.name || 'User'}
                 </h3>
@@ -303,6 +303,15 @@ export default function Chat() {
                   </p>
                 )}
               </div>
+              <button
+                type="button"
+                onClick={() => navigate(`/call?conversation_id=${activeConv.id}`)}
+                className="ml-auto flex items-center gap-1.5 rounded-full border border-gold/25 px-3 py-2 text-xs text-gold/80 transition-colors hover:border-gold hover:text-gold"
+                aria-label="Start audio call"
+              >
+                <FiPhone size={13} />
+                <span className="hidden sm:inline">Call</span>
+              </button>
             </div>
 
             {/* ══ الرسائل ══ */}
