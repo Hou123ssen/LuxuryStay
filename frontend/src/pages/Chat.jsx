@@ -15,6 +15,7 @@ export default function Chat() {
   const [messages,       setMessages]       = useState([]);
   const [newMsg,         setNewMsg]         = useState('');
   const [loading,        setLoading]        = useState(true);
+  const [loadError,      setLoadError]      = useState('');
   const [sending,        setSending]        = useState(false);
   const [mobileView,     setMobileView]     = useState('list');
   const bottomRef = useRef(null);
@@ -26,11 +27,14 @@ export default function Chat() {
     setConversations(prev => {
       const exists = prev.some(c => String(c.id) === String(conversation.id));
 
-      if (exists) {
-        return prev.map(c => String(c.id) === String(conversation.id) ? { ...c, ...conversation } : c);
-      }
+      if (!exists) return [conversation, ...prev];
 
-      return [conversation, ...prev];
+      const updated = prev.map(c => String(c.id) === String(conversation.id) ? { ...c, ...conversation } : c);
+
+      return [
+        updated.find(c => String(c.id) === String(conversation.id)),
+        ...updated.filter(c => String(c.id) !== String(conversation.id)),
+      ];
     });
   };
 
@@ -40,6 +44,7 @@ export default function Chat() {
       try {
         const res   = await chatService.getConversations();
         const convs = res.data?.data || res.data || [];
+        setLoadError('');
         setConversations(convs);
 
         // فتح محادثة محددة من URL
@@ -63,7 +68,10 @@ export default function Chat() {
             toast.error(err.response?.data?.message || 'Could not start conversation');
           }
         }
-      } catch { setConversations([]); }
+      } catch {
+        setConversations([]);
+        setLoadError('Could not load conversations.');
+      }
       setLoading(false);
     })();
     return () => clearInterval(pollRef.current);
@@ -119,11 +127,25 @@ export default function Chat() {
       await loadMessages(activeConv.id);
 
       // تحديث آخر رسالة في قائمة المحادثات
-      setConversations(p => p.map(c =>
-        c.id === activeConv.id
-          ? { ...c, last_message: { message: text, created_at: new Date().toISOString() } }
-          : c
-      ));
+      const sentAt = new Date().toISOString();
+      const lastMessage = { message: text, created_at: sentAt, sender_id: user?.id };
+
+      setConversations(prev => {
+        const updated = prev.map(c =>
+          String(c.id) === String(activeConv.id)
+            ? { ...c, last_message: lastMessage, updated_at: sentAt }
+            : c
+        );
+
+        return [
+          updated.find(c => String(c.id) === String(activeConv.id)),
+          ...updated.filter(c => String(c.id) !== String(activeConv.id)),
+        ].filter(Boolean);
+      });
+      setActiveConv(prev => prev && String(prev.id) === String(activeConv.id)
+        ? { ...prev, last_message: lastMessage, updated_at: sentAt }
+        : prev
+      );
     } catch (err) {
       setMessages(p => p.filter(m => m.id !== optimistic.id));
       toast.error(err.response?.data?.message || 'Failed to send message');
@@ -145,7 +167,7 @@ export default function Chat() {
   };
 
   const getPropertyLabel = (conv) => {
-    if (!conv?.property) return '';
+    if (!conv?.property_id || !conv?.property) return 'General conversation';
 
     return [conv.property.title || conv.property.name, conv.property.city]
       .filter(Boolean)
@@ -200,10 +222,17 @@ export default function Chat() {
                 </div>
               ))}
             </div>
+          ) : loadError ? (
+            <div className="text-center py-16 px-4">
+              <FiMessageCircle size={32} className="mx-auto text-cream/15 mb-3" />
+              <p className="text-cream/35 text-sm">{loadError}</p>
+              <p className="text-cream/20 text-xs mt-1">Please try again in a moment.</p>
+            </div>
           ) : conversations.length === 0 ? (
             <div className="text-center py-16 px-4">
               <FiMessageCircle size={32} className="mx-auto text-cream/15 mb-3" />
-              <p className="text-cream/30 text-sm">No conversations yet</p>
+              <p className="text-cream/35 text-sm">No conversations yet.</p>
+              <p className="text-cream/20 text-xs mt-1">Start by contacting a host from a property page.</p>
             </div>
           ) : (
             conversations.map(conv => {
@@ -236,7 +265,7 @@ export default function Chat() {
                     <p className="text-xs text-cream/35 truncate">
                       {propertyLabel || lastMsg || 'Start a conversation'}
                     </p>
-                    {propertyLabel && lastMsg && (
+                    {lastMsg && (
                       <p className="text-[10px] text-cream/25 truncate mt-0.5">{lastMsg}</p>
                     )}
                   </div>
@@ -280,8 +309,10 @@ export default function Chat() {
             <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4"
               style={{ background: 'var(--obsidian)' }}>
               {messages.length === 0 ? (
-                <div className="text-center py-16">
-                  <p className="text-cream/25 text-sm">No messages yet — say hello! 👋</p>
+                <div className="text-center py-16 px-4">
+                  <FiMessageCircle size={30} className="mx-auto text-cream/15 mb-3" />
+                  <p className="text-cream/35 text-sm">No messages yet.</p>
+                  <p className="text-cream/20 text-xs mt-1">Send the first message.</p>
                 </div>
               ) : (
                 messages.map((msg, i) => {
@@ -350,7 +381,8 @@ export default function Chat() {
               style={{ background: 'rgba(201,168,76,0.08)', border: '1px solid rgba(201,168,76,0.15)' }}>
               <FiMessageCircle size={28} className="text-gold/40" />
             </div>
-            <p className="text-cream/30 text-sm">Select a conversation to start messaging</p>
+            <p className="text-cream/35 text-sm">Select a conversation to start messaging.</p>
+            <p className="text-cream/20 text-xs">Your property conversations will appear here.</p>
           </div>
         )}
       </div>
