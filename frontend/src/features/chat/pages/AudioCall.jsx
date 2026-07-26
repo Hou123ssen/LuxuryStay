@@ -10,7 +10,7 @@ import {
   FiVolumeX,
   FiX,
 } from 'react-icons/fi';
-import { chatService } from '../../../shared/api/api';
+import { chatService } from '../api/chatApi';
 
 export default function AudioCall() {
   const [searchParams] = useSearchParams();

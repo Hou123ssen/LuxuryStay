@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { chatService, STORAGE_URL } from '../../../shared/api/api';
+import { STORAGE_URL } from '../../../shared/api/api';
+import { chatService } from '../../chat/api/chatApi';
 import { favoriteService } from '../../favorites/api/favoriteApi';
 import { propertyService } from '../api/propertyApi';
 import BookingCalendar from '../../bookings/components/BookingCalendar';

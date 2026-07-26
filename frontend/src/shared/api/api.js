@@ -39,18 +39,7 @@ api.interceptors.response.use(
   }
 );
 
-//  Chat 
-export const chatService = {
-  getConversations:   ()                => api.get('/conversations'),
-
-  // ÙŠÙ‚Ø¨Ù„ property_id Ø£Ùˆ other_user_id
-  createConversation: (data)            => api.post('/conversations', data),
-
-  getMessages:        (conversationId)  => api.get(`/messages/${conversationId}`),
-  sendMessage:        (data)            => api.post('/messages', data),
-};
-
-//  Notifications 
+//  Notifications
 export const notificationService = {
   list: () => api.get('/notifications'),
 };

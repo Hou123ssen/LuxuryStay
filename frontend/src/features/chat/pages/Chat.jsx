@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { chatService } from '../../../shared/api/api';
+import { chatService } from '../api/chatApi';
 import { format } from 'date-fns';
 import { FiSend, FiMessageCircle, FiSearch, FiChevronLeft, FiPhone } from 'react-icons/fi';
 import { useAuth } from '../../../app/providers/AuthContext';

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import api, { notificationService, chatService } from "../../../shared/api/api";
+import api, { notificationService } from "../../../shared/api/api";
+import { chatService } from "../../chat/api/chatApi";
 import { bookingService } from "../../bookings/api/bookingApi";
 import { useNavigate } from 'react-router-dom';
 
