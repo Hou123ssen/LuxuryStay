@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { propertyService, imageService, STORAGE_URL } from '../shared/api/api';
-import PropertyForm from '../components/property/PropertyForm';
-import { useAuth } from '../app/providers/AuthContext';
+import { propertyService, imageService, STORAGE_URL } from '../../../shared/api/api';
+import PropertyForm from '../components/PropertyForm';
+import { useAuth } from '../../../app/providers/AuthContext';
 import toast from 'react-hot-toast';
 import { FiLock } from 'react-icons/fi';
 

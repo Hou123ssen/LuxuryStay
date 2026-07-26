@@ -5,16 +5,16 @@ import ProtectedRoute from './ProtectedRoute';
 import Home           from '../../pages/Home';
 import Login          from '../../pages/Login';
 import Register       from '../../pages/Register';
-import Properties     from '../../pages/Properties';
-import PropertyDetail from '../../pages/PropertyDetail';
+import Properties     from '../../features/properties/pages/Properties';
+import PropertyDetail from '../../features/properties/pages/PropertyDetail';
 import Bookings       from '../../pages/Bookings';
 import Favorites      from '../../pages/Favorites';
 import Chat           from '../../pages/Chat';
 import AudioCall      from '../../pages/AudioCall';
 import Notifications  from '../../pages/Notifications';
 import Profile        from '../../pages/Profile';
-import AddProperty    from '../../pages/AddProperty';
-import EditProperty   from '../../pages/Editproperty';
+import AddProperty    from '../../features/properties/pages/AddProperty';
+import EditProperty   from '../../features/properties/pages/EditProperty';
 import NotFound       from '../../pages/NotFound';
 
 export default function AppRoutes() {

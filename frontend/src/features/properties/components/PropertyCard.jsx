@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FiHeart, FiStar, FiMapPin } from "react-icons/fi";
-import { favoriteService, STORAGE_URL } from "../../shared/api/api";
-import { useAuth } from "../../app/providers/AuthContext";
+import { favoriteService, STORAGE_URL } from "../../../shared/api/api";
+import { useAuth } from "../../../app/providers/AuthContext";
 import toast from "react-hot-toast";
 
 function resolveImage(raw) {

@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { propertyService, favoriteService, chatService, STORAGE_URL } from '../shared/api/api';
-import BookingCalendar from '../components/booking/BookingCalendar';
-import ReviewForm from '../components/property/ReviewForm';
-import DeleteConfirmModal from '../components/common/DeleteConfirmModal';
-import { useAuth } from '../app/providers/AuthContext';
+import { propertyService, favoriteService, chatService, STORAGE_URL } from '../../../shared/api/api';
+import BookingCalendar from '../../../components/booking/BookingCalendar';
+import ReviewForm from '../components/ReviewForm';
+import DeleteConfirmModal from '../../../components/common/DeleteConfirmModal';
+import { useAuth } from '../../../app/providers/AuthContext';
 import toast from 'react-hot-toast';
 import {
   FiMapPin, FiStar, FiHeart, FiMessageCircle,

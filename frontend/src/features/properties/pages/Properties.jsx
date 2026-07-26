@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { propertyService } from '../shared/api/api';
-import PropertyCard from '../components/property/PropertyCard';
-import PropertyFilters from '../components/property/PropertyFilters';
+import { propertyService } from '../../../shared/api/api';
+import PropertyCard from '../components/PropertyCard';
+import PropertyFilters from '../components/PropertyFilters';
 import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 
 const SKELETON = Array(6).fill(0);
