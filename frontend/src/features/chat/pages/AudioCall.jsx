@@ -13,6 +13,7 @@ import {
 import { useAuth } from '../../../app/providers/AuthContext';
 import { chatService } from '../api/chatApi';
 import { useJitsiAudioCall } from '../hooks/useJitsiAudioCall';
+import { useLibJitsiAudioCall } from '../hooks/useLibJitsiAudioCall';
 
 export default function AudioCall() {
   const { user } = useAuth();
@@ -21,7 +22,10 @@ export default function AudioCall() {
   const navigate = useNavigate();
   const conversationId = searchParams.get('conversation_id');
   const callSessionId = searchParams.get('call_session_id');
+  const isLibJitsiEngine = searchParams.get('audio_engine') === 'libjitsi';
+  const audioTransport = searchParams.get('transport') === 'bosh' ? 'bosh' : 'websocket';
   const isDebugJitsi = searchParams.get('debug_jitsi') === '1';
+  const isDebugAudio = searchParams.get('debug_audio') === '1';
   const providerContainerRef = useRef(null);
   const [conversation, setConversation] = useState(null);
   const [callSession, setCallSession] = useState(location.state?.callSession || null);
@@ -34,22 +38,31 @@ export default function AudioCall() {
   const [isPrejoinFallbackActive, setIsPrejoinFallbackActive] = useState(false);
   const handleProviderMutedChange = useCallback((muted) => setIsMuted(muted), []);
 
-  const {
-    providerStatus,
-    providerError,
-    isScriptLoaded,
-    isApiCreated,
-    lastProviderEvent,
-    isProviderReady,
-    toggleAudio,
-    hangUpProvider,
-  } = useJitsiAudioCall({
-    callSession,
+  const iframeAudio = useJitsiAudioCall({
+    callSession: isLibJitsiEngine ? null : callSession,
     parentRef: providerContainerRef,
     userName: user?.name,
     debug: isDebugJitsi,
     onMutedChange: handleProviderMutedChange,
   });
+
+  const libJitsiAudio = useLibJitsiAudioCall({
+    callSession,
+    userName: user?.name,
+    enabled: isLibJitsiEngine,
+    debug: isDebugAudio,
+    transport: audioTransport,
+  });
+
+  const providerStatus = isLibJitsiEngine ? libJitsiAudio.providerStatus : iframeAudio.providerStatus;
+  const providerError = isLibJitsiEngine ? libJitsiAudio.providerError : iframeAudio.providerError;
+  const isScriptLoaded = iframeAudio.isScriptLoaded;
+  const isApiCreated = iframeAudio.isApiCreated;
+  const lastProviderEvent = iframeAudio.lastProviderEvent;
+  const isProviderReady = isLibJitsiEngine ? libJitsiAudio.isProviderReady : iframeAudio.isProviderReady;
+  const toggleAudio = isLibJitsiEngine ? libJitsiAudio.toggleAudio : iframeAudio.toggleAudio;
+  const hangUpProvider = isLibJitsiEngine ? libJitsiAudio.hangUpProvider : iframeAudio.hangUpProvider;
+  const effectiveMuted = isLibJitsiEngine ? libJitsiAudio.isMuted : isMuted;
 
   useEffect(() => {
     let active = true;
@@ -142,7 +155,8 @@ export default function AudioCall() {
   };
 
   useEffect(() => {
-    const canShowFallback = !isDebugJitsi
+    const canShowFallback = !isLibJitsiEngine
+      && !isDebugJitsi
       && !isProviderReady
       && !isLeaving
       && !callError
@@ -163,22 +177,28 @@ export default function AudioCall() {
       setIsPrejoinFallbackActive(true);
     }, 2500);
 
-    return () => window.clearTimeout(fallbackTimer);
-  }, [callError, isDebugJitsi, isLeaving, isProviderReady, providerError, providerStatus]);
+      return () => window.clearTimeout(fallbackTimer);
+  }, [callError, isDebugJitsi, isLeaving, isLibJitsiEngine, isProviderReady, providerError, providerStatus]);
 
   const status = callError || providerError
     || (isLeaving
       ? 'Leaving...'
       : isLoadingCallSession
         ? 'Loading call session'
+        : providerStatus === 'loading-library'
+          ? 'Loading audio engine'
         : providerStatus === 'loading-script'
           ? 'Loading script'
+          : providerStatus === 'requesting-microphone'
+            ? 'Waiting for microphone permission...'
           : providerStatus === 'waiting-for-microphone'
             ? 'Waiting for microphone permission...'
             : providerStatus === 'connecting'
               ? 'Connecting audio...'
+              : providerStatus === 'joining'
+                ? 'Joining secure call...'
               : providerStatus === 'error'
-              ? 'Provider error'
+                ? 'Provider error'
               : callSession?.status === 'ended'
                 ? 'Ended'
                 : isProviderReady
@@ -188,7 +208,7 @@ export default function AudioCall() {
                     : 'Calling...');
 
   const prejoinFallbackActive = isPrejoinFallbackActive;
-  const showProviderIframe = isDebugJitsi || prejoinFallbackActive;
+  const showProviderIframe = !isLibJitsiEngine && (isDebugJitsi || prejoinFallbackActive);
   const initial = participantName?.[0]?.toUpperCase() || '?';
 
   return (
@@ -196,14 +216,16 @@ export default function AudioCall() {
       style={{ background: 'radial-gradient(circle at top, rgba(201,168,76,0.16), transparent 32%), linear-gradient(145deg, #07070d 0%, #10101f 48%, #050508 100%)' }}>
       <div className="absolute inset-0 opacity-40"
         style={{ background: 'linear-gradient(90deg, transparent 0%, rgba(201,168,76,0.05) 50%, transparent 100%)' }} />
-      <div
-        ref={providerContainerRef}
-        aria-hidden={!showProviderIframe}
-        className={showProviderIframe
-          ? 'absolute bottom-4 left-4 z-[360] h-64 w-96 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-gold/30 bg-black shadow-2xl'
-          : 'pointer-events-none absolute bottom-0 left-0 h-40 w-40 overflow-hidden opacity-0'}
-      />
-      {isDebugJitsi && (
+      {!isLibJitsiEngine && (
+        <div
+          ref={providerContainerRef}
+          aria-hidden={!showProviderIframe}
+          className={showProviderIframe
+            ? 'absolute bottom-4 left-4 z-[360] h-64 w-96 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-gold/30 bg-black shadow-2xl'
+            : 'pointer-events-none absolute bottom-0 left-0 h-40 w-40 overflow-hidden opacity-0'}
+        />
+      )}
+      {!isLibJitsiEngine && isDebugJitsi && (
         <div className="absolute right-4 top-20 z-[370] max-w-xs rounded-xl border border-gold/25 bg-black/80 p-3 font-mono text-[11px] leading-5 text-cream/80 shadow-2xl">
           <div>providerStatus: {providerStatus}</div>
           <div>roomName: {callSession?.room_name || 'none'}</div>
@@ -212,6 +234,26 @@ export default function AudioCall() {
           <div>api created: {isApiCreated ? 'yes' : 'no'}</div>
           <div>last event: {lastProviderEvent || 'none'}</div>
           <div>last error: {providerError || callError || 'none'}</div>
+        </div>
+      )}
+      {isLibJitsiEngine && isDebugAudio && (
+        <div className="absolute right-4 top-20 z-[370] max-w-xs rounded-xl border border-gold/25 bg-black/80 p-3 font-mono text-[11px] leading-5 text-cream/80 shadow-2xl">
+          <div>engine: {libJitsiAudio.diagnostics.engine}</div>
+          <div>selected transport: {libJitsiAudio.diagnostics.selectedTransport}</div>
+          <div>script loaded: {libJitsiAudio.diagnostics.scriptLoaded ? 'yes' : 'no'}</div>
+          <div>connection status: {libJitsiAudio.diagnostics.connectionStatus}</div>
+          <div>connection established: {libJitsiAudio.diagnostics.connectionEstablished ? 'yes' : 'no'}</div>
+          <div>conference status: {libJitsiAudio.diagnostics.conferenceStatus}</div>
+          <div>conference joining: {libJitsiAudio.diagnostics.conferenceJoinInProgress ? 'yes' : 'no'}</div>
+          <div>room: {libJitsiAudio.diagnostics.roomName || 'none'}</div>
+          <div>focusUserJid configured: {libJitsiAudio.diagnostics.focusUserJidConfigured ? 'yes' : 'no'}</div>
+          <div>local audio track: {libJitsiAudio.diagnostics.localAudioTrackCreated ? 'yes' : 'no'}</div>
+          <div>remote audio tracks: {libJitsiAudio.diagnostics.remoteAudioTrackCount}</div>
+          <div>last event: {libJitsiAudio.diagnostics.lastEvent || 'none'}</div>
+          <div>failure event: {libJitsiAudio.diagnostics.lastFailureEvent || 'none'}</div>
+          <div>connection failed code: {libJitsiAudio.diagnostics.connectionFailedCode || 'none'}</div>
+          <div>last error: {libJitsiAudio.diagnostics.lastSafeError || callError || 'none'}</div>
+          <div>safe args: {JSON.stringify(libJitsiAudio.diagnostics.lastFailureArgs || [])}</div>
         </div>
       )}
 
@@ -295,13 +337,13 @@ export default function AudioCall() {
               onClick={toggleMute}
               disabled={!isProviderReady || isLeaving}
               className={`flex flex-col items-center gap-2 rounded-2xl border px-3 py-4 text-xs transition-all ${
-                isMuted
+                effectiveMuted
                   ? 'border-gold/45 bg-gold/15 text-gold'
                   : 'border-white/10 bg-white/5 text-cream/75 hover:border-gold/35 hover:text-gold'
               } disabled:cursor-wait disabled:opacity-60`}
             >
-              {isMuted ? <FiMicOff size={24} /> : <FiMic size={24} />}
-              {isMuted ? 'Unmute' : 'Mute'}
+              {effectiveMuted ? <FiMicOff size={24} /> : <FiMic size={24} />}
+              {effectiveMuted ? 'Unmute' : 'Mute'}
             </button>
 
             <button
