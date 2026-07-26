@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { propertyService } from '../services/api';
+import { propertyService } from '../shared/api/api';
 import PropertyCard from '../components/property/PropertyCard';
 import PropertyFilters from '../components/property/PropertyFilters';
 import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';

@@ -1,4 +1,4 @@
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../app/providers/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { FiUser, FiMail, FiCalendar, FiHeart, FiMessageCircle, FiLogOut, FiArrowRight } from 'react-icons/fi';
 

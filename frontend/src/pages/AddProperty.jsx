@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { propertyService, imageService } from '../services/api';
+import { propertyService, imageService } from '../shared/api/api';
 import PropertyForm from '../components/property/PropertyForm';
 import toast from 'react-hot-toast';
 

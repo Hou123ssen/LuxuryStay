@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { reviewService } from "../../services/api";
-import { useAuth } from "../../context/AuthContext";
+import { reviewService } from "../../shared/api/api";
+import { useAuth } from "../../app/providers/AuthContext";
 import toast from "react-hot-toast";
 import { FiStar } from "react-icons/fi";
 

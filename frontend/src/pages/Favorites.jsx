@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { favoriteService } from '../services/api';
+import { favoriteService } from '../shared/api/api';
 import PropertyCard from '../components/property/PropertyCard';
 import { FiHeart } from 'react-icons/fi';
 

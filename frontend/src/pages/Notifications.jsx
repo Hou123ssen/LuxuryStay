@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import api, { notificationService, bookingService , chatService } from "../services/api";
+import api, { notificationService, bookingService , chatService } from "../shared/api/api";
 import { useNavigate } from 'react-router-dom';
 
 import { format } from "date-fns";
