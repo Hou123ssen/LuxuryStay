@@ -125,7 +125,7 @@ export function useLibJitsiAudioCall({ callSession, userName, enabled = false, d
   const setSafeError = useCallback((error) => {
     const message = safeErrorMessage(error);
     setSafeState(setLastSafeError, message);
-    setSafeState(setProviderError, 'The no-iframe audio engine could not connect.');
+    setSafeState(setProviderError, 'Unable to connect the secure audio call.');
     setSafeState(setProviderStatus, 'error');
     if (debug) console.error('[LuxurrStay lib-jitsi audio]', message, error);
   }, [debug, setSafeState]);

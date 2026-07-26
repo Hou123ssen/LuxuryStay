@@ -22,7 +22,8 @@ export default function AudioCall() {
   const navigate = useNavigate();
   const conversationId = searchParams.get('conversation_id');
   const callSessionId = searchParams.get('call_session_id');
-  const isLibJitsiEngine = searchParams.get('audio_engine') === 'libjitsi';
+  const isIframeEngine = searchParams.get('audio_engine') === 'iframe';
+  const isLibJitsiEngine = !isIframeEngine;
   const audioTransport = searchParams.get('transport') === 'bosh' ? 'bosh' : 'websocket';
   const isDebugJitsi = searchParams.get('debug_jitsi') === '1';
   const isDebugAudio = searchParams.get('debug_audio') === '1';
@@ -39,7 +40,7 @@ export default function AudioCall() {
   const handleProviderMutedChange = useCallback((muted) => setIsMuted(muted), []);
 
   const iframeAudio = useJitsiAudioCall({
-    callSession: isLibJitsiEngine ? null : callSession,
+    callSession: isIframeEngine ? callSession : null,
     parentRef: providerContainerRef,
     userName: user?.name,
     debug: isDebugJitsi,
@@ -154,6 +155,11 @@ export default function AudioCall() {
     toggleAudio();
   };
 
+  const retryCall = () => {
+    if (isLeaving) return;
+    window.location.reload();
+  };
+
   useEffect(() => {
     const canShowFallback = !isLibJitsiEngine
       && !isDebugJitsi
@@ -186,19 +192,19 @@ export default function AudioCall() {
       : isLoadingCallSession
         ? 'Loading call session'
         : providerStatus === 'loading-library'
-          ? 'Loading audio engine'
+          ? 'Loading library'
         : providerStatus === 'loading-script'
           ? 'Loading script'
-          : providerStatus === 'requesting-microphone'
-            ? 'Waiting for microphone permission...'
+        : providerStatus === 'requesting-microphone'
+            ? 'Requesting microphone'
           : providerStatus === 'waiting-for-microphone'
             ? 'Waiting for microphone permission...'
             : providerStatus === 'connecting'
               ? 'Connecting audio...'
               : providerStatus === 'joining'
-                ? 'Joining secure call...'
+                ? 'Joining call'
               : providerStatus === 'error'
-                ? 'Provider error'
+                ? 'Connection failed'
               : callSession?.status === 'ended'
                 ? 'Ended'
                 : isProviderReady
@@ -302,6 +308,15 @@ export default function AudioCall() {
             </div>
 
             <p className="mb-2 text-xs uppercase tracking-[0.24em] text-cream/35">{status}</p>
+            {isLibJitsiEngine && providerStatus === 'error' && !isLeaving && (
+              <button
+                type="button"
+                onClick={retryCall}
+                className="mb-3 rounded-full border border-gold/25 bg-gold/10 px-4 py-2 text-xs text-gold/85 transition-colors hover:border-gold/50 hover:text-gold"
+              >
+                Retry
+              </button>
+            )}
             {prejoinFallbackActive && (
               <p className="mb-3 max-w-xs text-xs text-gold/70">
                 Please confirm microphone access to join the secure call.
