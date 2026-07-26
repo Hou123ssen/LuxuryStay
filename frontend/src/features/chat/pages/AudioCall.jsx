@@ -31,11 +31,15 @@ export default function AudioCall() {
   const [callError, setCallError] = useState('');
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
+  const [isPrejoinFallbackActive, setIsPrejoinFallbackActive] = useState(false);
   const handleProviderMutedChange = useCallback((muted) => setIsMuted(muted), []);
 
   const {
     providerStatus,
     providerError,
+    isScriptLoaded,
+    isApiCreated,
+    lastProviderEvent,
     isProviderReady,
     toggleAudio,
     hangUpProvider,
@@ -137,23 +141,54 @@ export default function AudioCall() {
     toggleAudio();
   };
 
+  useEffect(() => {
+    const canShowFallback = !isDebugJitsi
+      && !isProviderReady
+      && !isLeaving
+      && !callError
+      && !providerError
+      && (providerStatus === 'connecting' || providerStatus === 'waiting-for-microphone');
+
+    if (!canShowFallback) {
+      setIsPrejoinFallbackActive(false);
+      return undefined;
+    }
+
+    if (providerStatus === 'waiting-for-microphone') {
+      setIsPrejoinFallbackActive(true);
+      return undefined;
+    }
+
+    const fallbackTimer = window.setTimeout(() => {
+      setIsPrejoinFallbackActive(true);
+    }, 2500);
+
+    return () => window.clearTimeout(fallbackTimer);
+  }, [callError, isDebugJitsi, isLeaving, isProviderReady, providerError, providerStatus]);
+
   const status = callError || providerError
     || (isLeaving
       ? 'Leaving...'
       : isLoadingCallSession
         ? 'Loading call session'
-        : providerStatus === 'connecting'
-          ? 'Connecting audio...'
-          : providerStatus === 'error'
-            ? 'Audio provider unavailable'
-            : callSession?.status === 'ended'
-              ? 'Ended'
-              : isProviderReady
-                ? 'Call ready'
-                : callSession
-                  ? 'Connecting audio...'
-                  : 'Calling...');
+        : providerStatus === 'loading-script'
+          ? 'Loading script'
+          : providerStatus === 'waiting-for-microphone'
+            ? 'Waiting for microphone permission...'
+            : providerStatus === 'connecting'
+              ? 'Connecting audio...'
+              : providerStatus === 'error'
+              ? 'Provider error'
+              : callSession?.status === 'ended'
+                ? 'Ended'
+                : isProviderReady
+                  ? 'Call ready'
+                  : callSession
+                    ? 'Connecting audio...'
+                    : 'Calling...');
 
+  const prejoinFallbackActive = isPrejoinFallbackActive;
+  const showProviderIframe = isDebugJitsi || prejoinFallbackActive;
   const initial = participantName?.[0]?.toUpperCase() || '?';
 
   return (
@@ -163,11 +198,22 @@ export default function AudioCall() {
         style={{ background: 'linear-gradient(90deg, transparent 0%, rgba(201,168,76,0.05) 50%, transparent 100%)' }} />
       <div
         ref={providerContainerRef}
-        aria-hidden={!isDebugJitsi}
-        className={isDebugJitsi
+        aria-hidden={!showProviderIframe}
+        className={showProviderIframe
           ? 'absolute bottom-4 left-4 z-[360] h-64 w-96 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-gold/30 bg-black shadow-2xl'
-          : 'pointer-events-none absolute -left-[9999px] top-0 h-px w-px overflow-hidden opacity-0'}
+          : 'pointer-events-none absolute bottom-0 left-0 h-40 w-40 overflow-hidden opacity-0'}
       />
+      {isDebugJitsi && (
+        <div className="absolute right-4 top-20 z-[370] max-w-xs rounded-xl border border-gold/25 bg-black/80 p-3 font-mono text-[11px] leading-5 text-cream/80 shadow-2xl">
+          <div>providerStatus: {providerStatus}</div>
+          <div>roomName: {callSession?.room_name || 'none'}</div>
+          <div>callSession id: {callSession?.id || 'none'}</div>
+          <div>script loaded: {isScriptLoaded ? 'yes' : 'no'}</div>
+          <div>api created: {isApiCreated ? 'yes' : 'no'}</div>
+          <div>last event: {lastProviderEvent || 'none'}</div>
+          <div>last error: {providerError || callError || 'none'}</div>
+        </div>
+      )}
 
       <div className="relative z-10 flex h-[100dvh] flex-col px-5 py-4 sm:px-8 sm:py-6">
         <header className="flex shrink-0 items-center justify-between gap-3">
@@ -214,6 +260,11 @@ export default function AudioCall() {
             </div>
 
             <p className="mb-2 text-xs uppercase tracking-[0.24em] text-cream/35">{status}</p>
+            {prejoinFallbackActive && (
+              <p className="mb-3 max-w-xs text-xs text-gold/70">
+                Please confirm microphone access to join the secure call.
+              </p>
+            )}
             <h1 className="font-display text-3xl text-cream sm:text-4xl lg:text-5xl">
               {loading ? 'Connecting' : participantName}
             </h1>

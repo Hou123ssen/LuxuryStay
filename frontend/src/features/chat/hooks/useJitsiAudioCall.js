@@ -38,6 +38,14 @@ export function useJitsiAudioCall({ callSession, parentRef, userName, debug = fa
   const apiRef = useRef(null);
   const [providerStatus, setProviderStatus] = useState('idle');
   const [providerError, setProviderError] = useState('');
+  const [isScriptLoaded, setIsScriptLoaded] = useState(!!window.JitsiMeetExternalAPI);
+  const [isApiCreated, setIsApiCreated] = useState(false);
+  const [lastProviderEvent, setLastProviderEvent] = useState('');
+
+  const trackEvent = useCallback((name, payload = null) => {
+    setLastProviderEvent(name);
+    if (debug) console.info('[LuxurrStay audio provider]', name, payload || '');
+  }, [debug]);
 
   const disposeProvider = useCallback(() => {
     if (!apiRef.current) return;
@@ -48,6 +56,7 @@ export function useJitsiAudioCall({ callSession, parentRef, userName, debug = fa
       console.error('Failed to dispose audio provider:', err);
     } finally {
       apiRef.current = null;
+      setIsApiCreated(false);
     }
   }, []);
 
@@ -89,19 +98,23 @@ export function useJitsiAudioCall({ callSession, parentRef, userName, debug = fa
       return () => { active = false; };
     }
 
-    setProviderStatus('connecting');
+    setProviderStatus('loading-script');
     setProviderError('');
+    setLastProviderEvent('');
 
     loadJitsiScript(callSession.script_url)
       .then(() => {
         if (!active || !parentRef.current || apiRef.current) return;
+        setIsScriptLoaded(true);
+        setProviderStatus('connecting');
+        trackEvent('scriptLoaded');
 
         try {
           const api = new window.JitsiMeetExternalAPI(callSession.domain, {
             roomName: callSession.room_name,
             parentNode: parentRef.current,
-            width: debug ? '100%' : 1,
-            height: debug ? '100%' : 1,
+            width: '100%',
+            height: '100%',
             userInfo: userName ? { displayName: userName } : undefined,
             configOverwrite: {
               startAudioOnly: true,
@@ -117,31 +130,80 @@ export function useJitsiAudioCall({ callSession, parentRef, userName, debug = fa
           });
 
           apiRef.current = api;
+          setIsApiCreated(true);
+          trackEvent('apiCreated');
 
-          api.addEventListener?.('videoConferenceJoined', () => {
+          const improveIframePermissions = () => {
+            const iframe = parentRef.current?.querySelector('iframe');
+            if (!iframe) return;
+
+            const currentAllow = iframe.getAttribute('allow') || '';
+            const requiredAllow = ['microphone', 'camera', 'fullscreen', 'display-capture', 'autoplay'];
+            const allow = Array.from(new Set([
+              ...currentAllow.split(';').map(value => value.trim()).filter(Boolean),
+              ...requiredAllow,
+            ])).join('; ');
+
+            iframe.setAttribute('allow', allow);
+          };
+
+          improveIframePermissions();
+          window.setTimeout(improveIframePermissions, 0);
+
+          api.addEventListener?.('videoConferenceJoined', (event) => {
             if (!active) return;
             setProviderStatus('ready');
+            trackEvent('videoConferenceJoined', event);
             try {
               api.executeCommand('setAudioOnly', true);
             } catch {}
           });
 
-          api.addEventListener?.('audioMuteStatusChanged', ({ muted }) => {
-            if (active) onMutedChange?.(!!muted);
+          api.addEventListener?.('audioAvailabilityChanged', (event) => {
+            if (!active) return;
+            if (event?.available === false) setProviderStatus('waiting-for-microphone');
+            trackEvent('audioAvailabilityChanged', event);
           });
 
-          api.addEventListener?.('participantLeft', () => {
-            if (active) setProviderStatus('ready');
+          api.addEventListener?.('audioMuteStatusChanged', ({ muted }) => {
+            if (active) onMutedChange?.(!!muted);
+            trackEvent('audioMuteStatusChanged', { muted });
+          });
+
+          api.addEventListener?.('participantJoined', (event) => {
+            if (!active) return;
+            trackEvent('participantJoined', event);
+          });
+
+          api.addEventListener?.('participantLeft', (event) => {
+            if (!active) return;
+            trackEvent('participantLeft', event);
           });
 
           api.addEventListener?.('readyToClose', () => {
+            trackEvent('readyToClose');
             if (active) disposeProvider();
           });
 
-          api.addEventListener?.('errorOccurred', () => {
+          api.addEventListener?.('errorOccurred', (event) => {
             if (!active) return;
+            trackEvent('errorOccurred', event);
             setProviderStatus('error');
-            setProviderError('Unable to connect audio provider. Please try again.');
+            setProviderError(event?.message || 'Unable to connect audio provider. Please try again.');
+          });
+
+          api.addEventListener?.('conferenceFailed', (event) => {
+            if (!active) return;
+            trackEvent('conferenceFailed', event);
+            setProviderStatus('error');
+            setProviderError(event?.message || 'Unable to connect audio provider. Please try again.');
+          });
+
+          api.addEventListener?.('connectionFailed', (event) => {
+            if (!active) return;
+            trackEvent('connectionFailed', event);
+            setProviderStatus('error');
+            setProviderError(event?.message || 'Unable to connect audio provider. Please try again.');
           });
         } catch (err) {
           console.error('Failed to create audio provider:', err);
@@ -153,19 +215,23 @@ export function useJitsiAudioCall({ callSession, parentRef, userName, debug = fa
       .catch((err) => {
         console.error('Failed to load audio provider:', err);
         if (!active) return;
+        trackEvent('scriptLoadFailed', err);
         setProviderStatus('error');
-        setProviderError('Unable to connect audio provider. Please try again.');
+        setProviderError(err?.message || 'Unable to connect audio provider. Please try again.');
       });
 
     return () => {
       active = false;
       disposeProvider();
     };
-  }, [callSession, debug, disposeProvider, onMutedChange, parentRef, userName]);
+  }, [callSession, disposeProvider, onMutedChange, parentRef, trackEvent, userName]);
 
   return {
     providerStatus,
     providerError,
+    isScriptLoaded,
+    isApiCreated,
+    lastProviderEvent,
     isProviderReady: providerStatus === 'ready',
     toggleAudio,
     hangUpProvider,
