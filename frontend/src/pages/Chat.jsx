@@ -20,6 +20,20 @@ export default function Chat() {
   const bottomRef = useRef(null);
   const pollRef   = useRef(null);
 
+  const upsertConversation = (conversation) => {
+    if (!conversation?.id) return;
+
+    setConversations(prev => {
+      const exists = prev.some(c => String(c.id) === String(conversation.id));
+
+      if (exists) {
+        return prev.map(c => String(c.id) === String(conversation.id) ? { ...c, ...conversation } : c);
+      }
+
+      return [conversation, ...prev];
+    });
+  };
+
   // ── تحميل المحادثات ────────────────────────────────────────────────────────
   useEffect(() => {
     (async () => {
@@ -36,16 +50,17 @@ export default function Chat() {
           const found = convs.find(c => String(c.id) === convIdParam);
           if (found) openConversation(found);
         } else if (propIdParam) {
-          const existing = convs.find(c => String(c.property_id) === propIdParam);
-          if (existing) {
-            openConversation(existing);
-          } else {
-            try {
-              const cr   = await chatService.createConversation({ property_id: propIdParam });
-              const nc   = cr.data?.data || cr.data;
-              setConversations(p => [nc, ...p]);
-              openConversation(nc);
-            } catch { toast.error('Could not start conversation'); }
+          try {
+            const cr           = await chatService.createConversation({ property_id: propIdParam });
+            const conversation = cr.data?.data || cr.data;
+
+            if (conversation?.id) {
+              upsertConversation(conversation);
+              openConversation(conversation);
+              navigate(`/chat?conversation_id=${conversation.id}`, { replace: true });
+            }
+          } catch (err) {
+            toast.error(err.response?.data?.message || 'Could not start conversation');
           }
         }
       } catch { setConversations([]); }
@@ -109,9 +124,9 @@ export default function Chat() {
           ? { ...c, last_message: { message: text, created_at: new Date().toISOString() } }
           : c
       ));
-    } catch {
+    } catch (err) {
       setMessages(p => p.filter(m => m.id !== optimistic.id));
-      toast.error('Failed to send message');
+      toast.error(err.response?.data?.message || 'Failed to send message');
       setNewMsg(text);
     }
     setSending(false);
@@ -127,6 +142,14 @@ export default function Chat() {
     if (conv.other_user) return conv.other_user;
     const isOne = String(conv.user_one_id) === String(user?.id);
     return isOne ? conv.user_two : conv.user_one;
+  };
+
+  const getPropertyLabel = (conv) => {
+    if (!conv?.property) return '';
+
+    return [conv.property.title || conv.property.name, conv.property.city]
+      .filter(Boolean)
+      .join(' - ');
   };
 
   // ── اسم المرسل ─────────────────────────────────────────────────────────────
@@ -187,6 +210,7 @@ export default function Chat() {
               const other    = getOtherUser(conv);
               const isActive = activeConv?.id === conv.id;
               const lastMsg  = conv.last_message?.message || conv.last_message?.body || '';
+              const propertyLabel = getPropertyLabel(conv);
 
               return (
                 <button key={conv.id} onClick={() => openConversation(conv)}
@@ -209,7 +233,12 @@ export default function Chat() {
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-cream/35 truncate">{lastMsg || 'Start a conversation'}</p>
+                    <p className="text-xs text-cream/35 truncate">
+                      {propertyLabel || lastMsg || 'Start a conversation'}
+                    </p>
+                    {propertyLabel && lastMsg && (
+                      <p className="text-[10px] text-cream/25 truncate mt-0.5">{lastMsg}</p>
+                    )}
                   </div>
                 </button>
               );
@@ -232,13 +261,18 @@ export default function Chat() {
                 style={{ background: 'rgba(201,168,76,0.15)', color: 'var(--gold)' }}>
                 {getAvatar(getOtherUser(activeConv)?.name)}
               </div>
-              <div>
+              <div className="min-w-0">
                 <h3 className="text-sm font-medium text-cream">
                   {getOtherUser(activeConv)?.name || 'User'}
                 </h3>
                 <p className="text-xs text-cream/35">
                   {getOtherUser(activeConv)?.email || ''}
                 </p>
+                {getPropertyLabel(activeConv) && (
+                  <p className="text-[10px] text-gold/60 truncate">
+                    {getPropertyLabel(activeConv)}
+                  </p>
+                )}
               </div>
             </div>
 

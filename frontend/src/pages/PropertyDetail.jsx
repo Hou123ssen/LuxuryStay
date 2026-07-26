@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { propertyService, favoriteService, STORAGE_URL } from '../services/api';
+import { propertyService, favoriteService, chatService, STORAGE_URL } from '../services/api';
 import BookingCalendar from '../components/booking/BookingCalendar';
 import ReviewForm from '../components/property/ReviewForm';
 import DeleteConfirmModal from '../components/common/DeleteConfirmModal';
@@ -212,6 +212,7 @@ export default function PropertyDetail() {
   const [isOwner,       setIsOwner]       = useState(false);
   const [deleteOpen,    setDeleteOpen]    = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [contactLoading, setContactLoading] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -246,6 +247,30 @@ export default function PropertyDetail() {
     } catch (err) {
       toast.error(err.response?.data?.message || 'Could not delete');
     } finally { setDeleteLoading(false); }
+  };
+
+  const handleContactHost = async () => {
+    if (!isAuth) {
+      toast.error('Please sign in');
+      navigate('/login');
+      return;
+    }
+
+    setContactLoading(true);
+    try {
+      const res = await chatService.createConversation({ property_id: property.id });
+      const conversation = res.data?.data || res.data;
+
+      if (conversation?.id) {
+        navigate(`/chat?conversation_id=${conversation.id}`);
+      } else {
+        navigate(`/chat?property_id=${property.id}`);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not start conversation');
+    } finally {
+      setContactLoading(false);
+    }
   };
 
   if (loading) return (
@@ -348,9 +373,9 @@ export default function PropertyDetail() {
                       </button>
                     </>
                   ) : (
-                    <button onClick={() => navigate(`/chat?property_id=${property.id}`)}
+                    <button onClick={handleContactHost} disabled={contactLoading}
                       className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gold/25 text-gold/80 hover:border-gold hover:text-gold transition-colors text-sm">
-                      <FiMessageCircle size={14} /> Message Host
+                      <FiMessageCircle size={14} /> {contactLoading ? 'Opening...' : 'Message Host'}
                     </button>
                   )}
                 </div>
