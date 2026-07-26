@@ -7,6 +7,7 @@ use App\Models\Message;
 use App\Models\Property;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class MessagingTest extends TestCase
@@ -42,6 +43,103 @@ class MessagingTest extends TestCase
 
         $this->assertTrue($ids->contains($ownConversation->id));
         $this->assertFalse($ids->contains($otherConversation->id));
+    }
+
+    public function test_conversation_index_includes_property_context_last_message_and_legacy_conversations(): void
+    {
+        $guest = User::factory()->create();
+        $host = User::factory()->create();
+        $legacyUser = User::factory()->create();
+        $property = $this->propertyFor($host, [
+            'title' => 'Mansoria',
+            'city' => 'Casablanca',
+        ]);
+
+        $propertyConversation = $this->conversationBetween($guest, $host, $property);
+        Message::create([
+            'conversation_id' => $propertyConversation->id,
+            'sender_id' => $host->id,
+            'message' => 'The villa is available.',
+        ]);
+
+        $legacyConversation = $this->conversationBetween($guest, $legacyUser);
+
+        $response = $this
+            ->actingAs($guest, 'sanctum')
+            ->getJson('/api/conversations')
+            ->assertOk();
+
+        $conversations = collect($response->json('data'));
+        $propertyPayload = $conversations->firstWhere('id', $propertyConversation->id);
+        $legacyPayload = $conversations->firstWhere('id', $legacyConversation->id);
+
+        $this->assertSame($property->id, $propertyPayload['property_id']);
+        $this->assertSame($property->id, $propertyPayload['property']['id']);
+        $this->assertSame('Mansoria', $propertyPayload['property']['title']);
+        $this->assertSame('Casablanca', $propertyPayload['property']['city']);
+        $this->assertSame($host->id, $propertyPayload['other_user']['id']);
+        $this->assertSame('The villa is available.', $propertyPayload['last_message']['message']);
+
+        $this->assertNull($legacyPayload['property_id']);
+        $this->assertNull($legacyPayload['property']);
+        $this->assertSame($legacyUser->id, $legacyPayload['other_user']['id']);
+        $this->assertNull($legacyPayload['last_message']);
+    }
+
+    public function test_conversation_index_orders_conversations_by_latest_activity(): void
+    {
+        $user = User::factory()->create();
+        $olderParticipant = User::factory()->create();
+        $newerParticipant = User::factory()->create();
+
+        Carbon::setTestNow('2026-07-26 10:00:00');
+        $olderConversation = $this->conversationBetween($user, $olderParticipant);
+        Message::create([
+            'conversation_id' => $olderConversation->id,
+            'sender_id' => $olderParticipant->id,
+            'message' => 'Older activity',
+        ]);
+        $olderConversation->touch();
+
+        Carbon::setTestNow('2026-07-26 10:05:00');
+        $newerConversation = $this->conversationBetween($user, $newerParticipant);
+        Message::create([
+            'conversation_id' => $newerConversation->id,
+            'sender_id' => $newerParticipant->id,
+            'message' => 'Newer activity',
+        ]);
+        $newerConversation->touch();
+        Carbon::setTestNow();
+
+        $response = $this
+            ->actingAs($user, 'sanctum')
+            ->getJson('/api/conversations')
+            ->assertOk();
+
+        $ids = collect($response->json('data'))->pluck('id')->all();
+
+        $this->assertSame([$newerConversation->id, $olderConversation->id], $ids);
+        $this->assertSame('Newer activity', $response->json('data.0.last_message.message'));
+        $this->assertSame('Older activity', $response->json('data.1.last_message.message'));
+    }
+
+    public function test_conversation_index_does_not_expose_unsafe_user_fields(): void
+    {
+        $user = User::factory()->create();
+        $other = User::factory()->create();
+
+        $this->conversationBetween($user, $other);
+
+        $response = $this
+            ->actingAs($user, 'sanctum')
+            ->getJson('/api/conversations')
+            ->assertOk();
+
+        $otherUser = $response->json('data.0.other_user');
+
+        $this->assertArrayNotHasKey('password', $otherUser);
+        $this->assertArrayNotHasKey('remember_token', $otherUser);
+        $this->assertArrayNotHasKey('tokens', $otherUser);
     }
 
     public function test_authenticated_user_can_create_conversation_by_property_id(): void
