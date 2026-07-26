@@ -36,11 +36,62 @@ class ImageUploadTest extends TestCase
 
         $path = $response->json('images.0');
 
+        $this->assertIsString($path);
+        $this->assertStringStartsWith('images/', $path);
+
         $this->assertDatabaseHas('images', [
             'property_id' => $property->id,
             'path' => $path,
         ]);
         Storage::disk('public')->assertExists($path);
+    }
+
+    public function test_property_detail_images_include_path_and_url(): void
+    {
+        $owner = User::factory()->create();
+        $property = $this->createPropertyFor($owner);
+
+        $property->images()->create([
+            'path' => 'images/suite.jpg',
+        ]);
+
+        $response = $this
+            ->actingAs($owner, 'sanctum')
+            ->getJson('http://127.0.0.1:8000/api/properties/'.$property->id);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('images.0.path', 'images/suite.jpg');
+
+        $url = $response->json('images.0.url');
+
+        $this->assertIsString($url);
+        $this->assertStringStartsWith('http://127.0.0.1:8000/storage/images/', $url);
+        $this->assertStringContainsString('/storage/images/suite.jpg', $url);
+    }
+
+    public function test_property_list_images_include_path_and_url(): void
+    {
+        $owner = User::factory()->create();
+        $property = $this->createPropertyFor($owner);
+
+        $property->images()->create([
+            'path' => 'images/listing.jpg',
+        ]);
+
+        $response = $this
+            ->actingAs($owner, 'sanctum')
+            ->getJson('http://127.0.0.1:8000/api/properties');
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('data.0.images.0.path', 'images/listing.jpg');
+
+        $url = $response->json('data.0.images.0.url');
+
+        $this->assertIsString($url);
+        $this->assertStringStartsWith('http://127.0.0.1:8000/storage/images/', $url);
+        $this->assertStringContainsString('/storage/images/listing.jpg', $url);
     }
 
     public function test_authenticated_non_owner_cannot_upload_image(): void
