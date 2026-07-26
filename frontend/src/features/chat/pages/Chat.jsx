@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { chatService } from '../shared/api/api';
+import { chatService } from '../../../shared/api/api';
 import { format } from 'date-fns';
 import { FiSend, FiMessageCircle, FiSearch, FiChevronLeft, FiPhone } from 'react-icons/fi';
-import { useAuth } from '../app/providers/AuthContext';
+import { useAuth } from '../../../app/providers/AuthContext';
 import toast from 'react-hot-toast';
 
 export default function Chat() {
