@@ -75,7 +75,7 @@ export default function AudioCall() {
       <div className="absolute inset-0 opacity-40"
         style={{ background: 'linear-gradient(90deg, transparent 0%, rgba(201,168,76,0.05) 50%, transparent 100%)' }} />
 
-      <div className="relative z-10 flex h-[100dvh] flex-col px-5 py-4 sm:px-8 sm:py-5">
+      <div className="relative z-10 flex h-[100dvh] flex-col px-5 py-4 sm:px-8 sm:py-6">
         <header className="flex shrink-0 items-center justify-between gap-3">
           <button
             type="button"
@@ -101,18 +101,18 @@ export default function AudioCall() {
           </button>
         </header>
 
-        <section className="mx-auto mt-2 flex min-h-0 w-full flex-1 flex-col overflow-hidden border border-transparent bg-transparent sm:my-5 sm:max-w-[560px] sm:rounded-[2rem] sm:border-gold/15 sm:bg-[#11111f]/80 sm:px-7 sm:shadow-[0_24px_80px_rgba(0,0,0,0.45),0_0_70px_rgba(201,168,76,0.08)] sm:backdrop-blur-xl lg:max-w-[600px]">
-          <main className="mx-auto flex min-h-0 w-full max-w-xl flex-1 flex-col items-center justify-center px-1 py-3 text-center sm:px-0 sm:py-6">
+        <section className="mx-auto mt-2 flex min-h-0 w-full flex-1 flex-col overflow-hidden border border-transparent bg-transparent sm:my-6 sm:max-w-[600px] sm:rounded-[2.25rem] sm:border-gold/15 sm:bg-[rgba(17,17,31,0.86)] sm:px-8 sm:ring-1 sm:ring-white/5 sm:shadow-[0_30px_100px_rgba(0,0,0,0.52),0_0_90px_rgba(201,168,76,0.10)] sm:backdrop-blur-2xl lg:max-w-[620px]">
+          <main className="mx-auto flex min-h-0 w-full max-w-xl flex-1 flex-col items-center justify-center px-1 py-3 text-center sm:px-0 sm:py-7">
             <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-gold/20 bg-gold/10 px-3 py-1.5 text-xs text-gold/85 sm:mb-6">
               <FiShield size={13} />
               Secure LuxurrStay call
             </div>
 
-            <div className="relative mb-5 flex h-44 w-44 items-center justify-center sm:mb-7 sm:h-56 sm:w-56 lg:h-60 lg:w-60">
+            <div className="relative mb-5 flex h-44 w-44 items-center justify-center sm:mb-7 sm:h-60 sm:w-60 lg:h-64 lg:w-64">
               <div className="absolute inset-8 rounded-full border border-gold/20 animate-ping" />
               <div className="absolute inset-4 rounded-full border border-gold/15" />
               <div className="absolute inset-0 rounded-full bg-gold/5 blur-2xl" />
-              <div className="relative flex h-28 w-28 items-center justify-center rounded-full border border-gold/30 bg-gold/15 font-display text-5xl text-gold shadow-2xl sm:h-36 sm:w-36 sm:text-6xl">
+              <div className="relative flex h-28 w-28 items-center justify-center rounded-full border border-gold/30 bg-gold/15 font-display text-5xl text-gold shadow-2xl sm:h-40 sm:w-40 sm:text-6xl">
                 {initial}
               </div>
             </div>
@@ -141,7 +141,7 @@ export default function AudioCall() {
             </div>
           </main>
 
-          <footer className="mx-auto grid w-full max-w-sm shrink-0 grid-cols-3 gap-3 pb-5 sm:gap-4 sm:pb-7"
+          <footer className="mx-auto grid w-full max-w-sm shrink-0 grid-cols-3 gap-3 pb-5 sm:max-w-md sm:gap-4 sm:pb-8"
             style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}>
             <button
               type="button"
