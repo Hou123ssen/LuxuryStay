@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { propertyService, favoriteService, chatService, STORAGE_URL } from '../../../shared/api/api';
+import { favoriteService, chatService, STORAGE_URL } from '../../../shared/api/api';
+import { propertyService } from '../api/propertyApi';
 import BookingCalendar from '../../bookings/components/BookingCalendar';
 import ReviewForm from '../components/ReviewForm';
 import DeleteConfirmModal from '../../../shared/components/common/DeleteConfirmModal';

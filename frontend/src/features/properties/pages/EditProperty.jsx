@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { propertyService, imageService, STORAGE_URL } from '../../../shared/api/api';
+import { STORAGE_URL } from '../../../shared/api/api';
+import { propertyService, imageService } from '../api/propertyApi';
 import PropertyForm from '../components/PropertyForm';
 import { useAuth } from '../../../app/providers/AuthContext';
 import toast from 'react-hot-toast';

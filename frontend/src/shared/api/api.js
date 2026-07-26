@@ -39,16 +39,6 @@ api.interceptors.response.use(
   }
 );
 
-//  Properties 
-export const propertyService = {
-  list:   (params)     => api.get('/properties', { params }),
-  get:    (id)         => api.get(`/properties/${id}`),
-  availability: (id)   => api.get(`/properties/${id}/availability`),
-  create: (data)       => api.post('/properties', data),
-  update: (id, data)   => api.put(`/properties/${id}`, data),
-  delete: (id)         => api.delete(`/properties/${id}`),
-};
-
 //  Bookings 
 export const bookingService = {
   list:          ()     => api.get('/bookings'),
@@ -57,11 +47,6 @@ export const bookingService = {
   reject:        (id)   => api.post(`/bookings/${id}/reject`),
   ownerBookings: ()     => api.get('/owner/bookings'),
   cancel:        (id)   => api.delete(`/bookings/${id}`),
-};
-
-//  Reviews 
-export const reviewService = {
-  create: (data) => api.post('/reviews', data),
 };
 
 //  Favorites 
@@ -74,29 +59,12 @@ export const favoriteService = {
 export const chatService = {
   getConversations:   ()                => api.get('/conversations'),
 
-  // يقبل property_id أو other_user_id
+  // ÙŠÙ‚Ø¨Ù„ property_id Ø£Ùˆ other_user_id
   createConversation: (data)            => api.post('/conversations', data),
 
   getMessages:        (conversationId)  => api.get(`/messages/${conversationId}`),
   sendMessage:        (data)            => api.post('/messages', data),
 };
-
-//  Images :
-export const imageService = {
-  uploadMultiple: (files, propertyId) => {
-  const fd = new FormData();
-
-  files.forEach((file) => {
-    fd.append('images[]', file); // ← بدون أي تعديل
-  });
-
-  fd.append('property_id', propertyId);
-
-  return api.post('/images', fd, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
-}
-}
 
 //  Notifications 
 export const notificationService = {
