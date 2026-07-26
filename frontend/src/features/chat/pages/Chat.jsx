@@ -18,9 +18,11 @@ export default function Chat() {
   const [loadError,      setLoadError]      = useState('');
   const [sending,        setSending]        = useState(false);
   const [isStartingCall, setIsStartingCall] = useState(false);
+  const [activeCallSession, setActiveCallSession] = useState(null);
   const [mobileView,     setMobileView]     = useState('list');
   const bottomRef = useRef(null);
   const pollRef   = useRef(null);
+  const activeCallPollRef = useRef(null);
 
   const upsertConversation = (conversation) => {
     if (!conversation?.id) return;
@@ -87,13 +89,37 @@ export default function Chat() {
     } catch {}
   }, []);
 
+  const loadActiveCallSession = useCallback(async (convId) => {
+    try {
+      const res = await chatService.getActiveCallSession(convId);
+      setActiveCallSession(res.data?.data || null);
+    } catch {
+      setActiveCallSession(null);
+    }
+  }, []);
+
   const openConversation = (conv) => {
     setActiveConv(conv);
+    setActiveCallSession(null);
     setMobileView('chat');
     loadMessages(conv.id);
     clearInterval(pollRef.current);
     pollRef.current = setInterval(() => loadMessages(conv.id), 4000);
   };
+
+  useEffect(() => {
+    clearInterval(activeCallPollRef.current);
+
+    if (!activeConv?.id) {
+      setActiveCallSession(null);
+      return undefined;
+    }
+
+    loadActiveCallSession(activeConv.id);
+    activeCallPollRef.current = setInterval(() => loadActiveCallSession(activeConv.id), 8000);
+
+    return () => clearInterval(activeCallPollRef.current);
+  }, [activeConv?.id, loadActiveCallSession]);
 
   // ── scroll للأسفل عند رسالة جديدة ─────────────────────────────────────────
   useEffect(() => {
@@ -176,6 +202,14 @@ export default function Chat() {
   };
 
   // ── helpers ────────────────────────────────────────────────────────────────
+  const joinActiveCall = () => {
+    if (!activeConv?.id || !activeCallSession?.id) return;
+
+    navigate(`/call?conversation_id=${activeConv.id}&call_session_id=${activeCallSession.id}`, {
+      state: { callSession: activeCallSession },
+    });
+  };
+
   const isOwn     = (msg) => String(msg.sender_id) === String(user?.id);
   const getAvatar = (name) => name?.[0]?.toUpperCase() || '?';
 
@@ -337,6 +371,40 @@ export default function Chat() {
             </div>
 
             {/* ══ الرسائل ══ */}
+            {activeCallSession && (
+              <div
+                className="border-b px-4 py-3 sm:px-5"
+                style={{
+                  borderColor: 'rgba(201,168,76,0.14)',
+                  background: 'linear-gradient(135deg, rgba(201,168,76,0.16), rgba(255,255,255,0.035))',
+                }}
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gold/30 bg-gold/15 text-gold">
+                      <FiPhone size={16} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-cream">Active audio call</p>
+                      <p className="text-xs text-cream/45">
+                        {String(activeCallSession.started_by_id) === String(user?.id)
+                          ? 'Your secure call is active.'
+                          : 'The other participant started a secure audio call.'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={joinActiveCall}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-full border border-gold/35 bg-gold/15 px-4 py-2 text-xs font-medium text-gold transition-colors hover:border-gold hover:bg-gold/20"
+                  >
+                    <FiPhone size={13} />
+                    Join call
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4"
               style={{ background: 'var(--obsidian)' }}>
               {messages.length === 0 ? (
