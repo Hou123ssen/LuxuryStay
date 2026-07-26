@@ -43,6 +43,26 @@ class CallSessionController extends Controller
         ]);
     }
 
+    public function active(Conversation $conversation)
+    {
+        $userId = (int) Auth::id();
+
+        if (! $this->userParticipatesIn($conversation, $userId)) {
+            return response()->json([
+                'message' => 'This action is unauthorized.',
+            ], 403);
+        }
+
+        $callSession = CallSession::where('conversation_id', $conversation->id)
+            ->where('status', 'active')
+            ->latest('started_at')
+            ->first();
+
+        return response()->json([
+            'data' => $callSession ? $this->callSessionPayload($callSession) : null,
+        ]);
+    }
+
     public function end(CallSession $callSession)
     {
         $userId = (int) Auth::id();

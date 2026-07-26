@@ -43,6 +43,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // API ROUTES FOR CONVERSATIONS AND MESSAGES : 
     Route::get('/conversations',              [ConversationController::class, 'index']);
     Route::post('/conversations',             [ConversationController::class, 'store']);
+    Route::get('/conversations/{conversation}/call-sessions/active', [CallSessionController::class, 'active']);
     Route::post('/conversations/{conversation}/call-sessions', [CallSessionController::class, 'store']);
     Route::post('/call-sessions/{callSession}/end', [CallSessionController::class, 'end']);
 

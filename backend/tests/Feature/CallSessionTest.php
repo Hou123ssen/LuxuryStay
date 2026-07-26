@@ -60,6 +60,78 @@ class CallSessionTest extends TestCase
             ->assertJsonPath('message', 'This action is unauthorized.');
     }
 
+    public function test_participant_gets_active_call_session(): void
+    {
+        $user = User::factory()->create();
+        $conversation = $this->conversationBetween($user, User::factory()->create());
+        $callSession = $this->activeCallSession($conversation, $user);
+
+        $this
+            ->actingAs($user, 'sanctum')
+            ->getJson('/api/conversations/'.$conversation->id.'/call-sessions/active')
+            ->assertOk()
+            ->assertJsonPath('data.id', $callSession->id)
+            ->assertJsonPath('data.conversation_id', $conversation->id)
+            ->assertJsonPath('data.provider', 'community')
+            ->assertJsonPath('data.domain', 'kmeet.infomaniak.com')
+            ->assertJsonPath('data.script_url', 'https://kmeet.infomaniak.com/external_api.js')
+            ->assertJsonPath('data.room_name', $callSession->room_name)
+            ->assertJsonPath('data.audio_only', true)
+            ->assertJsonPath('data.status', 'active')
+            ->assertJsonPath('data.started_by_id', $user->id);
+    }
+
+    public function test_participant_gets_null_when_no_active_call_session_exists(): void
+    {
+        $user = User::factory()->create();
+        $conversation = $this->conversationBetween($user, User::factory()->create());
+
+        $this
+            ->actingAs($user, 'sanctum')
+            ->getJson('/api/conversations/'.$conversation->id.'/call-sessions/active')
+            ->assertOk()
+            ->assertJsonPath('data', null);
+    }
+
+    public function test_non_participant_cannot_get_active_call_session(): void
+    {
+        $outsider = User::factory()->create();
+        $conversation = $this->conversationBetween(User::factory()->create(), User::factory()->create());
+        $this->activeCallSession($conversation, User::find($conversation->user_one_id));
+
+        $this
+            ->actingAs($outsider, 'sanctum')
+            ->getJson('/api/conversations/'.$conversation->id.'/call-sessions/active')
+            ->assertForbidden()
+            ->assertJsonPath('message', 'This action is unauthorized.');
+    }
+
+    public function test_ended_call_session_is_not_returned_as_active(): void
+    {
+        $user = User::factory()->create();
+        $conversation = $this->conversationBetween($user, User::factory()->create());
+        $callSession = $this->activeCallSession($conversation, $user);
+        $callSession->update([
+            'status' => 'ended',
+            'ended_at' => now(),
+        ]);
+
+        $this
+            ->actingAs($user, 'sanctum')
+            ->getJson('/api/conversations/'.$conversation->id.'/call-sessions/active')
+            ->assertOk()
+            ->assertJsonPath('data', null);
+    }
+
+    public function test_unauthenticated_user_cannot_get_active_call_session(): void
+    {
+        $conversation = $this->conversationBetween(User::factory()->create(), User::factory()->create());
+
+        $this
+            ->getJson('/api/conversations/'.$conversation->id.'/call-sessions/active')
+            ->assertUnauthorized();
+    }
+
     public function test_room_name_is_not_predictable_from_conversation_id(): void
     {
         $user = User::factory()->create();
