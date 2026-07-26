@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FiHeart, FiStar, FiMapPin } from "react-icons/fi";
-import { favoriteService, STORAGE_URL } from "../../../shared/api/api";
+import { STORAGE_URL } from "../../../shared/api/api";
+import { favoriteService } from "../../favorites/api/favoriteApi";
 import { useAuth } from "../../../app/providers/AuthContext";
 import toast from "react-hot-toast";
 

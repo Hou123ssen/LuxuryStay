@@ -39,12 +39,6 @@ api.interceptors.response.use(
   }
 );
 
-//  Favorites 
-export const favoriteService = {
-  list:   () => api.get('/favorites'),
-  toggle: (propertyId) => api.post('/favorites/toggle', { property_id: propertyId }),
-};
-
 //  Chat 
 export const chatService = {
   getConversations:   ()                => api.get('/conversations'),
