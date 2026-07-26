@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { propertyService, favoriteService, chatService, STORAGE_URL } from '../../../shared/api/api';
 import BookingCalendar from '../../bookings/components/BookingCalendar';
 import ReviewForm from '../components/ReviewForm';
-import DeleteConfirmModal from '../../../components/common/DeleteConfirmModal';
+import DeleteConfirmModal from '../../../shared/components/common/DeleteConfirmModal';
 import { useAuth } from '../../../app/providers/AuthContext';
 import toast from 'react-hot-toast';
 import {
