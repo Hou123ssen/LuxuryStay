@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { favoriteService } from '../shared/api/api';
-import PropertyCard from '../features/properties/components/PropertyCard';
+import { favoriteService } from '../../../shared/api/api';
+import PropertyCard from '../../properties/components/PropertyCard';
 import { FiHeart } from 'react-icons/fi';
 
 export default function Favorites() {

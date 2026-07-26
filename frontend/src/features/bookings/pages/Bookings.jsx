@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { bookingService, STORAGE_URL } from '../shared/api/api';
-import api from '../shared/api/api';
-import { useAuth } from '../app/providers/AuthContext';
+import { bookingService, STORAGE_URL } from '../../../shared/api/api';
+import api from '../../../shared/api/api';
+import { useAuth } from '../../../app/providers/AuthContext';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 import {
