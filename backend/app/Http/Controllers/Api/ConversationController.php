@@ -8,96 +8,94 @@ use App\Models\Message;
 use App\Models\Property;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 
 class ConversationController extends Controller
 {
-    // ── GET /api/conversations ────────────────────────────────────────────────
     public function index()
     {
         $userId = (int) Auth::id();
 
         $conversations = Conversation::with(['userOne', 'userTwo', 'lastMessage'])
-            ->where('user_one_id', $userId)
-            ->orWhere('user_two_id', $userId)
+            ->where(function ($query) use ($userId) {
+                $query->where('user_one_id', $userId)
+                    ->orWhere('user_two_id', $userId);
+            })
             ->latest('updated_at')
             ->get()
-            ->map(function ($conv) use ($userId) {
-                // الشخص الآخر في المحادثة
-                $other = (int) $conv->user_one_id === $userId
-                    ? $conv->userTwo
-                    : $conv->userOne;
+            ->map(function ($conversation) use ($userId) {
+                $other = (int) $conversation->user_one_id === $userId
+                    ? $conversation->userTwo
+                    : $conversation->userOne;
 
                 return [
-                    'id'           => $conv->id,
-                    'user_one_id'  => $conv->user_one_id,
-                    'user_two_id'  => $conv->user_two_id,
-                    'other_user'   => $other,
-                    'last_message' => $conv->lastMessage,
-                    'updated_at'   => $conv->updated_at,
+                    'id' => $conversation->id,
+                    'user_one_id' => $conversation->user_one_id,
+                    'user_two_id' => $conversation->user_two_id,
+                    'other_user' => $other,
+                    'last_message' => $conversation->lastMessage,
+                    'updated_at' => $conversation->updated_at,
                 ];
             });
 
         return response()->json(['data' => $conversations]);
     }
 
-    // ── POST /api/conversations ───────────────────────────────────────────────
     public function store(Request $request)
     {
-        $request->validate([
-            // يقبل other_user_id مباشرة أو property_id للبحث عن المالك
+        $validated = $request->validate([
             'other_user_id' => 'required_without:property_id|integer|exists:users,id',
-            'property_id'   => 'required_without:other_user_id|integer|exists:properties,id',
+            'property_id' => 'required_without:other_user_id|integer|exists:properties,id',
+            'user_one_id' => 'prohibited',
+            'user_two_id' => 'prohibited',
+            'sender_id' => 'prohibited',
         ]);
 
         $userId = (int) Auth::id();
 
-        // ── تحديد الشخص الآخر ────────────────────────────────────────────────
-        if ($request->property_id) {
-            $property    = Property::findOrFail($request->property_id);
+        if (isset($validated['property_id'])) {
+            $property = Property::findOrFail($validated['property_id']);
             $otherUserId = (int) $property->user_id;
         } else {
-            $otherUserId = (int) $request->other_user_id;
+            $otherUserId = (int) $validated['other_user_id'];
         }
 
-        // ── لا تبدأ محادثة مع نفسك ───────────────────────────────────────────
         if ($otherUserId === $userId) {
             return response()->json([
                 'message' => 'You cannot start a conversation with yourself.',
             ], 422);
         }
 
-        // ── ابحث عن محادثة موجودة ────────────────────────────────────────────
-        $existing = Conversation::where(function ($q) use ($userId, $otherUserId) {
-            $q->where('user_one_id', $userId)
+        $existing = Conversation::where(function ($query) use ($userId, $otherUserId) {
+            $query->where('user_one_id', $userId)
                 ->where('user_two_id', $otherUserId);
-        })->orWhere(function ($q) use ($userId, $otherUserId) {
-            $q->where('user_one_id', $otherUserId)
+        })->orWhere(function ($query) use ($userId, $otherUserId) {
+            $query->where('user_one_id', $otherUserId)
                 ->where('user_two_id', $userId);
         })->first();
 
         if ($existing) {
-            return response()->json($existing, 200); // ← محادثة موجودة
+            return response()->json($existing);
         }
 
-        // ── أنشئ محادثة جديدة ────────────────────────────────────────────────
         $conversation = Conversation::create([
             'user_one_id' => $userId,
             'user_two_id' => $otherUserId,
         ]);
 
-        return response()->json($conversation, 201); // ← محادثة جديدة
+        return response()->json($conversation, 201);
     }
 
-    // ── GET /api/messages/{conversationId} ───────────────────────────────────
     public function messages($conversationId)
     {
         $userId = (int) Auth::id();
+        $conversation = Conversation::findOrFail($conversationId);
 
-        $conversation = Conversation::where('id', $conversationId)
-            ->where(function ($q) use ($userId) {
-                $q->where('user_one_id', $userId)
-                    ->orWhere('user_two_id', $userId);
-            })->firstOrFail();
+        if (! $this->userParticipatesIn($conversation, $userId)) {
+            return response()->json([
+                'message' => 'This action is unauthorized.',
+            ], 403);
+        }
 
         $messages = Message::with('sender')
             ->where('conversation_id', $conversation->id)
@@ -107,40 +105,45 @@ class ConversationController extends Controller
         return response()->json(['data' => $messages]);
     }
 
-    // ── POST /api/messages ────────────────────────────────────────────────────
     public function sendMessage(Request $request)
     {
+        $validated = $request->validate([
+            'conversation_id' => 'required|integer|exists:conversations,id',
+            'body' => 'required|string|max:2000',
+            'sender_id' => 'prohibited',
+        ]);
 
-        try {
-            $request->validate([
-                'conversation_id' => 'required|integer|exists:conversations,id',
-                'body'            => 'required|string|max:2000',
+        $body = trim($validated['body']);
+
+        if ($body === '') {
+            throw ValidationException::withMessages([
+                'body' => ['The body field is required.'],
             ]);
-
-            $userId = (int) Auth::id();
-
-            // تحقق أن المستخدم طرف في المحادثة
-            $conversation = Conversation::where('id', $request->conversation_id)
-                ->where(function ($q) use ($userId) {
-                    $q->where('user_one_id', $userId)
-                        ->orWhere('user_two_id', $userId);
-                })->firstOrFail();
-
-            $message = Message::create([
-                'conversation_id' => $conversation->id,
-                'sender_id'       => $userId,
-                'message'         => $request->body,
-            ]);
-
-            // تحديث وقت المحادثة
-            $conversation->touch();
-
-            return response()->json($message->load('sender'), 201);
-        } catch (\Exception $e) {
-            return response()->json([
-                'error' => $e->getMessage(),
-                'line'  => $e->getLine(),
-            ], 500);
         }
+
+        $userId = (int) Auth::id();
+        $conversation = Conversation::findOrFail($validated['conversation_id']);
+
+        if (! $this->userParticipatesIn($conversation, $userId)) {
+            return response()->json([
+                'message' => 'This action is unauthorized.',
+            ], 403);
+        }
+
+        $message = Message::create([
+            'conversation_id' => $conversation->id,
+            'sender_id' => $userId,
+            'message' => $body,
+        ]);
+
+        $conversation->touch();
+
+        return response()->json($message->load('sender'), 201);
+    }
+
+    private function userParticipatesIn(Conversation $conversation, int $userId): bool
+    {
+        return (int) $conversation->user_one_id === $userId
+            || (int) $conversation->user_two_id === $userId;
     }
 }
