@@ -2,17 +2,17 @@ import { Routes, Route } from 'react-router-dom';
 import ProtectedRoute from './ProtectedRoute';
 
 // Pages
-import Home           from '../../pages/Home';
-import Login          from '../../pages/Login';
-import Register       from '../../pages/Register';
+import Home           from '../../features/home/pages/Home';
+import Login          from '../../features/auth/pages/Login';
+import Register       from '../../features/auth/pages/Register';
 import Properties     from '../../features/properties/pages/Properties';
 import PropertyDetail from '../../features/properties/pages/PropertyDetail';
 import Bookings       from '../../features/bookings/pages/Bookings';
 import Favorites      from '../../features/favorites/pages/Favorites';
 import Chat           from '../../features/chat/pages/Chat';
 import AudioCall      from '../../features/chat/pages/AudioCall';
-import Notifications  from '../../pages/Notifications';
-import Profile        from '../../pages/Profile';
+import Notifications  from '../../features/notifications/pages/Notifications';
+import Profile        from '../../features/profile/pages/Profile';
 import AddProperty    from '../../features/properties/pages/AddProperty';
 import EditProperty   from '../../features/properties/pages/EditProperty';
 import NotFound       from '../../pages/NotFound';
