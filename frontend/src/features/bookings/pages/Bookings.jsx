@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { bookingService, STORAGE_URL } from '../../../shared/api/api';
-import api from '../../../shared/api/api';
+import { STORAGE_URL } from '../../../shared/api/api';
+import { bookingService } from '../api/bookingApi';
 import { useAuth } from '../../../app/providers/AuthContext';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -34,7 +34,7 @@ export default function Bookings() {
         setBookings(res.data?.data || res.data);
 
         // حجوزات ملكياتي كمالك
-        const ownerRes = await api.get('/owner/bookings');
+        const ownerRes = await bookingService.ownerBookings();
         setMyProps(ownerRes.data?.data || ownerRes.data || []);
       } catch {
         setBookings([]);

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { addDays, differenceInCalendarDays } from 'date-fns';
-import { bookingService } from '../../../shared/api/api';
+import { bookingService } from '../api/bookingApi';
 import { propertyService } from '../../properties/api/propertyApi';
 import { useAuth } from '../../../app/providers/AuthContext';
 import { useNavigate } from 'react-router-dom';
