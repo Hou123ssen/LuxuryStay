@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import api, { notificationService } from "../../../shared/api/api";
+import { notificationService } from "../api/notificationApi";
 import { chatService } from "../../chat/api/chatApi";
 import { bookingService } from "../../bookings/api/bookingApi";
 import { useNavigate } from 'react-router-dom';
@@ -37,14 +37,14 @@ export default function Notifications() {
 
   const markAllRead = async () => {
     try {
-      await api.put("/notifications/read-all");
+      await notificationService.markAllAsRead();
       setNotifs((prev) => prev.map((n) => ({ ...n, read: true })));
     } catch {}
   };
 
   const markOneRead = async (id) => {
     try {
-      await api.put(`/notifications/${id}/read`);
+      await notificationService.markAsRead(id);
       setNotifs((prev) =>
         prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
       );

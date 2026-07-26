@@ -39,9 +39,4 @@ api.interceptors.response.use(
   }
 );
 
-//  Notifications
-export const notificationService = {
-  list: () => api.get('/notifications'),
-};
-
 export default api;
