@@ -28,6 +28,13 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'jitsi' => [
+        'provider' => env('JITSI_PROVIDER', 'community'),
+        'domain' => env('JITSI_DOMAIN', 'kmeet.infomaniak.com'),
+        'script_url' => env('JITSI_SCRIPT_URL', 'https://kmeet.infomaniak.com/external_api.js'),
+        'auth_enabled' => env('JITSI_AUTH_ENABLED', false),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

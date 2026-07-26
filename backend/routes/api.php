@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\CallSessionController;
 use App\Http\Controllers\Api\ChatController;
 use App\Http\Controllers\Api\ConversationController;
 use App\Http\Controllers\Api\FavoriteController;
@@ -42,6 +43,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // API ROUTES FOR CONVERSATIONS AND MESSAGES : 
     Route::get('/conversations',              [ConversationController::class, 'index']);
     Route::post('/conversations',             [ConversationController::class, 'store']);
+    Route::post('/conversations/{conversation}/call-sessions', [CallSessionController::class, 'store']);
+    Route::post('/call-sessions/{callSession}/end', [CallSessionController::class, 'end']);
 
     Route::get('/messages/{conversationId}',  [ConversationController::class, 'messages']);
     Route::post('/messages',                  [ConversationController::class, 'sendMessage']);
