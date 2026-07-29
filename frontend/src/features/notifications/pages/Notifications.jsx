@@ -126,6 +126,13 @@ export default function Notifications() {
     setActionLoad(null);
   };
 
+  const getBookingUrl = (notif) => {
+    if (!notif.booking_id) return "/bookings";
+
+    const tab = notif.type === "booking_request" ? "owner-bookings" : "upcoming";
+    return `/bookings?tab=${tab}&booking_id=${notif.booking_id}`;
+  };
+
   const unreadCount = notifs.filter((n) => !n.read).length;
 
   // أيقونة حسب نوع الـ notification
@@ -238,9 +245,10 @@ export default function Notifications() {
                   </span>
 
                   {/* ✅ أزرار Accept/Reject — تظهر فقط لـ booking_request */}
-                  {n.type === "booking_request" && n.booking_id && (
+                  {n.booking_id && (
                     <div className="flex gap-2 mt-3 flex-wrap">
                       {/* ── زر Chat مع الزبون ── */}
+                      {n.type === "booking_request" && (
                       <button
                         onClick={async () => {
                           try {
@@ -258,16 +266,17 @@ export default function Notifications() {
                       >
                         <FiMessageCircle size={12} /> Chat with Guest
                       </button>
+                      )}
 
                       {/* ── Decline ── */}
                       <button
-                        onClick={() => navigate("/bookings")}
+                        onClick={() => navigate(getBookingUrl(n))}
                         className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-white/10 text-cream/55 hover:border-gold/25 hover:text-gold transition-colors text-xs"
                       >
                         View Booking
                       </button>
 
-                      {!n.read && (
+                      {n.type === "booking_request" && (
                         <button
                           onClick={() => handleReject(n)}
                           disabled={!!actionLoad}
@@ -283,7 +292,7 @@ export default function Notifications() {
                       )}
 
                       {/* ── Accept ── */}
-                      {!n.read && (
+                      {n.type === "booking_request" && (
                         <button
                           onClick={() => handleAccept(n)}
                           disabled={!!actionLoad}

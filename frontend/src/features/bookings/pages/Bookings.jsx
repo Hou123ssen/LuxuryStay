@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { STORAGE_URL } from '../../../shared/api/api';
 import { bookingService } from '../api/bookingApi';
 import { useAuth } from '../../../app/providers/AuthContext';
@@ -18,14 +18,31 @@ const STATUS_STYLES = {
   completed: 'bg-cream/10 text-cream/60 border-cream/10',
 };
 
+const QUERY_TAB_TO_STATE = {
+  upcoming: 'upcoming',
+  past: 'past',
+  'owner-bookings': 'owner',
+};
+
+const STATE_TAB_TO_QUERY = {
+  upcoming: 'upcoming',
+  past: 'past',
+  owner: 'owner-bookings',
+};
+
 export default function Bookings() {
   const navigate     = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user }     = useAuth();
   const [bookings,   setBookings]   = useState([]);
   const [myProps,    setMyProps]    = useState([]); // حجوزات ملكياتي
   const [loading,    setLoad]       = useState(true);
-  const [tab,        setTab]        = useState('upcoming');
+  const [tab,        setTab]        = useState(QUERY_TAB_TO_STATE[searchParams.get('tab')] || 'upcoming');
   const [actionLoad, setActionLoad] = useState(null); // id الحجز الجاري عليه action
+
+  const [highlightedBookingId, setHighlightedBookingId] = useState(searchParams.get('booking_id'));
+  const bookingRefs = useRef({});
+  const targetBookingId = searchParams.get('booking_id');
 
   useEffect(() => {
     (async () => {
@@ -72,6 +89,38 @@ export default function Bookings() {
   const upcoming = bookings.filter(b => new Date(b.end_date) >= now);
   const past     = bookings.filter(b => new Date(b.end_date) < now);
   const shown    = tab === 'upcoming' ? upcoming : tab === 'past' ? past : myProps;
+
+  useEffect(() => {
+    const requestedTab = QUERY_TAB_TO_STATE[searchParams.get('tab')];
+    if (requestedTab) setTab(requestedTab);
+    setHighlightedBookingId(searchParams.get('booking_id'));
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (loading || !targetBookingId) return undefined;
+
+    const target = shown.find(b => String(b.id) === String(targetBookingId));
+    if (!target) return undefined;
+
+    setHighlightedBookingId(targetBookingId);
+    window.setTimeout(() => {
+      bookingRefs.current[targetBookingId]?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    }, 80);
+
+    const timer = window.setTimeout(() => setHighlightedBookingId(null), 3500);
+    return () => window.clearTimeout(timer);
+  }, [loading, targetBookingId, tab, bookings, myProps]);
+
+  const handleTabChange = (nextTab) => {
+    setTab(nextTab);
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', STATE_TAB_TO_QUERY[nextTab] || nextTab);
+    next.delete('booking_id');
+    setSearchParams(next);
+  };
 
   const nights = (b) => Math.max(1, Math.round(
     (new Date(b.end_date) - new Date(b.start_date)) / 86400000
@@ -190,7 +239,7 @@ export default function Bookings() {
           { key: 'past',     label: `Past (${past.length})` },
           { key: 'owner',    label: `My Properties' Bookings (${myProps.length})` },
         ].map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)}
+          <button key={t.key} onClick={() => handleTabChange(t.key)}
             className={`px-4 py-2 rounded-lg text-sm transition-all ${
               tab === t.key ? 'bg-gold text-obsidian font-medium' : 'text-cream/50 hover:text-cream'
             }`}>
@@ -217,7 +266,15 @@ export default function Bookings() {
       ) : (
         <div className="space-y-4">
           {shown.map((b, i) => (
-            <div key={b.id} className={`fade-up fade-up-${Math.min(i+1,4)}`}>
+            <div
+              key={b.id}
+              ref={(el) => { bookingRefs.current[b.id] = el; }}
+              className={`fade-up fade-up-${Math.min(i+1,4)} rounded-2xl transition-all duration-500 ${
+                String(highlightedBookingId) === String(b.id)
+                  ? 'ring-2 ring-gold/70 shadow-[0_0_32px_rgba(201,168,76,0.22)]'
+                  : 'ring-0'
+              }`}
+            >
               <BookingCard b={b} isOwnerView={tab === 'owner'} />
             </div>
           ))}
