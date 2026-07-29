@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Conversation;
+use App\Models\ConversationRead;
 use App\Models\Message;
 use App\Models\Property;
 use App\Models\User;
@@ -79,11 +80,211 @@ class MessagingTest extends TestCase
         $this->assertSame('Casablanca', $propertyPayload['property']['city']);
         $this->assertSame($host->id, $propertyPayload['other_user']['id']);
         $this->assertSame('The villa is available.', $propertyPayload['last_message']['message']);
+        $this->assertSame(1, $propertyPayload['unread_message_count']);
 
         $this->assertNull($legacyPayload['property_id']);
         $this->assertNull($legacyPayload['property']);
         $this->assertSame($legacyUser->id, $legacyPayload['other_user']['id']);
         $this->assertNull($legacyPayload['last_message']);
+        $this->assertSame(0, $legacyPayload['unread_message_count']);
+    }
+
+    public function test_conversation_index_counts_only_unread_messages_from_other_participant(): void
+    {
+        $user = User::factory()->create();
+        $other = User::factory()->create();
+        $conversation = $this->conversationBetween($user, $other);
+
+        Message::create([
+            'conversation_id' => $conversation->id,
+            'sender_id' => $other->id,
+            'message' => 'First from other',
+        ]);
+        Message::create([
+            'conversation_id' => $conversation->id,
+            'sender_id' => $other->id,
+            'message' => 'Second from other',
+        ]);
+        Message::create([
+            'conversation_id' => $conversation->id,
+            'sender_id' => $user->id,
+            'message' => 'Reply from me',
+        ]);
+
+        $this
+            ->actingAs($user, 'sanctum')
+            ->getJson('/api/conversations')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $conversation->id)
+            ->assertJsonPath('data.0.unread_message_count', 2);
+    }
+
+    public function test_each_participant_sees_their_own_unread_message_count(): void
+    {
+        $user = User::factory()->create();
+        $other = User::factory()->create();
+        $conversation = $this->conversationBetween($user, $other);
+
+        foreach (range(1, 5) as $index) {
+            Message::create([
+                'conversation_id' => $conversation->id,
+                'sender_id' => $other->id,
+                'message' => 'Message from other '.$index,
+            ]);
+        }
+
+        foreach (range(1, 2) as $index) {
+            Message::create([
+                'conversation_id' => $conversation->id,
+                'sender_id' => $user->id,
+                'message' => 'Message from user '.$index,
+            ]);
+        }
+
+        $this
+            ->actingAs($user, 'sanctum')
+            ->getJson('/api/conversations')
+            ->assertOk()
+            ->assertJsonPath('data.0.unread_message_count', 5);
+
+        $this
+            ->actingAs($other, 'sanctum')
+            ->getJson('/api/conversations')
+            ->assertOk()
+            ->assertJsonPath('data.0.unread_message_count', 2);
+    }
+
+    public function test_marking_conversation_as_read_resets_unread_count_for_authenticated_user(): void
+    {
+        $user = User::factory()->create();
+        $other = User::factory()->create();
+        $conversation = $this->conversationBetween($user, $other);
+
+        Message::create([
+            'conversation_id' => $conversation->id,
+            'sender_id' => $other->id,
+            'message' => 'Unread message',
+        ]);
+        Message::create([
+            'conversation_id' => $conversation->id,
+            'sender_id' => $user->id,
+            'message' => 'Own message',
+        ]);
+
+        $this
+            ->actingAs($user, 'sanctum')
+            ->getJson('/api/conversations')
+            ->assertOk()
+            ->assertJsonPath('data.0.unread_message_count', 1);
+
+        $this
+            ->actingAs($user, 'sanctum')
+            ->postJson('/api/conversations/'.$conversation->id.'/read')
+            ->assertOk()
+            ->assertJsonPath('data.conversation_id', $conversation->id)
+            ->assertJsonPath('data.unread_message_count', 0);
+
+        $this->assertDatabaseHas('conversation_reads', [
+            'conversation_id' => $conversation->id,
+            'user_id' => $user->id,
+        ]);
+
+        $this
+            ->actingAs($user, 'sanctum')
+            ->getJson('/api/conversations')
+            ->assertOk()
+            ->assertJsonPath('data.0.unread_message_count', 0);
+    }
+
+    public function test_unread_count_only_includes_messages_after_last_read_at(): void
+    {
+        $user = User::factory()->create();
+        $other = User::factory()->create();
+        $conversation = $this->conversationBetween($user, $other);
+
+        Carbon::setTestNow('2026-07-29 10:00:00');
+        Message::create([
+            'conversation_id' => $conversation->id,
+            'sender_id' => $other->id,
+            'message' => 'Before read',
+        ]);
+
+        ConversationRead::create([
+            'conversation_id' => $conversation->id,
+            'user_id' => $user->id,
+            'last_read_at' => now(),
+        ]);
+
+        Carbon::setTestNow('2026-07-29 10:05:00');
+        Message::create([
+            'conversation_id' => $conversation->id,
+            'sender_id' => $user->id,
+            'message' => 'Own message after read',
+        ]);
+        Message::create([
+            'conversation_id' => $conversation->id,
+            'sender_id' => $other->id,
+            'message' => 'After read',
+        ]);
+        Carbon::setTestNow();
+
+        $this
+            ->actingAs($user, 'sanctum')
+            ->getJson('/api/conversations')
+            ->assertOk()
+            ->assertJsonPath('data.0.unread_message_count', 1);
+    }
+
+    public function test_other_participants_unread_count_is_independent_after_read(): void
+    {
+        $user = User::factory()->create();
+        $other = User::factory()->create();
+        $conversation = $this->conversationBetween($user, $other);
+
+        Message::create([
+            'conversation_id' => $conversation->id,
+            'sender_id' => $other->id,
+            'message' => 'Unread for user',
+        ]);
+        Message::create([
+            'conversation_id' => $conversation->id,
+            'sender_id' => $user->id,
+            'message' => 'Unread for other',
+        ]);
+
+        $this
+            ->actingAs($user, 'sanctum')
+            ->postJson('/api/conversations/'.$conversation->id.'/read')
+            ->assertOk();
+
+        $this
+            ->actingAs($user, 'sanctum')
+            ->getJson('/api/conversations')
+            ->assertOk()
+            ->assertJsonPath('data.0.unread_message_count', 0);
+
+        $this
+            ->actingAs($other, 'sanctum')
+            ->getJson('/api/conversations')
+            ->assertOk()
+            ->assertJsonPath('data.0.unread_message_count', 1);
+    }
+
+    public function test_non_participant_cannot_mark_conversation_as_read(): void
+    {
+        $outsider = User::factory()->create();
+        $conversation = $this->conversationBetween(User::factory()->create(), User::factory()->create());
+
+        $this
+            ->actingAs($outsider, 'sanctum')
+            ->postJson('/api/conversations/'.$conversation->id.'/read')
+            ->assertForbidden()
+            ->assertJsonPath('message', 'This action is unauthorized.');
+
+        $this->assertDatabaseMissing('conversation_reads', [
+            'conversation_id' => $conversation->id,
+            'user_id' => $outsider->id,
+        ]);
     }
 
     public function test_conversation_index_orders_conversations_by_latest_activity(): void

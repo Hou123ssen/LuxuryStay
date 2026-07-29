@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Conversation;
+use App\Models\ConversationRead;
 use App\Models\Message;
 use App\Models\Property;
 use Illuminate\Http\Request;
@@ -16,7 +17,10 @@ class ConversationController extends Controller
     {
         $userId = (int) Auth::id();
 
-        $conversations = Conversation::with(['property', 'userOne', 'userTwo', 'lastMessage'])
+        $conversations = $this->withUnreadMessageCount(
+            Conversation::with(['property', 'userOne', 'userTwo', 'lastMessage']),
+            $userId
+        )
             ->where(function ($query) use ($userId) {
                 $query->where('user_one_id', $userId)
                     ->orWhere('user_two_id', $userId);
@@ -59,6 +63,8 @@ class ConversationController extends Controller
             $existing = $this->findConversationForUsers($userId, $otherUserId, $property->id);
 
             if ($existing) {
+                $existing->loadCount($this->unreadMessageCountWithCount($userId));
+
                 return response()->json($this->conversationPayload(
                     $existing->load(['property', 'userOne', 'userTwo', 'lastMessage']),
                     $this->otherUserFor($existing, $userId)
@@ -88,6 +94,8 @@ class ConversationController extends Controller
         $existing = $this->findConversationForUsers($userId, $otherUserId);
 
         if ($existing) {
+            $existing->loadCount($this->unreadMessageCountWithCount($userId));
+
             return response()->json($this->conversationPayload(
                 $existing->load(['property', 'userOne', 'userTwo', 'lastMessage']),
                 $this->otherUserFor($existing, $userId)
@@ -160,6 +168,33 @@ class ConversationController extends Controller
         return response()->json($message->load('sender'), 201);
     }
 
+    public function markAsRead(Conversation $conversation)
+    {
+        $userId = (int) Auth::id();
+
+        if (! $this->userParticipatesIn($conversation, $userId)) {
+            return response()->json([
+                'message' => 'This action is unauthorized.',
+            ], 403);
+        }
+
+        ConversationRead::updateOrCreate(
+            [
+                'conversation_id' => $conversation->id,
+                'user_id' => $userId,
+            ],
+            ['last_read_at' => now()]
+        );
+
+        return response()->json([
+            'message' => 'Conversation marked as read.',
+            'data' => [
+                'conversation_id' => $conversation->id,
+                'unread_message_count' => 0,
+            ],
+        ]);
+    }
+
     private function userParticipatesIn(Conversation $conversation, int $userId): bool
     {
         return (int) $conversation->user_one_id === $userId
@@ -202,7 +237,42 @@ class ConversationController extends Controller
             'user_two_id' => $conversation->user_two_id,
             'other_user' => $otherUser,
             'last_message' => $conversation->lastMessage,
+            'unread_message_count' => (int) ($conversation->unread_message_count ?? 0),
             'updated_at' => $conversation->updated_at,
+        ];
+    }
+
+    private function withUnreadMessageCount($query, int $userId)
+    {
+        return $query->withCount($this->unreadMessageCountWithCount($userId));
+    }
+
+    private function unreadMessageCountWithCount(int $userId): array
+    {
+        return [
+            'messages as unread_message_count' => function ($query) use ($userId) {
+                $query
+                    ->where('sender_id', '<>', $userId)
+                    ->where(function ($query) use ($userId) {
+                        $query
+                            ->whereNotExists(function ($subquery) use ($userId) {
+                                $subquery
+                                    ->selectRaw('1')
+                                    ->from('conversation_reads')
+                                    ->whereColumn('conversation_reads.conversation_id', 'messages.conversation_id')
+                                    ->where('conversation_reads.user_id', $userId)
+                                    ->whereNotNull('conversation_reads.last_read_at');
+                            })
+                            ->orWhere('messages.created_at', '>', function ($subquery) use ($userId) {
+                                $subquery
+                                    ->select('last_read_at')
+                                    ->from('conversation_reads')
+                                    ->whereColumn('conversation_reads.conversation_id', 'messages.conversation_id')
+                                    ->where('conversation_reads.user_id', $userId)
+                                    ->limit(1);
+                            });
+                    });
+            },
         ];
     }
 }

@@ -81,13 +81,28 @@ export default function Chat() {
   }, []);
 
   // ── تحميل الرسائل ─────────────────────────────────────────────────────────
-  const loadMessages = useCallback(async (convId) => {
+  const markConversationAsRead = useCallback(async (convId) => {
+    await chatService.markConversationAsRead(convId);
+
+    setConversations(prev => prev.map(c =>
+      String(c.id) === String(convId)
+        ? { ...c, unread_message_count: 0 }
+        : c
+    ));
+    setActiveConv(prev => prev && String(prev.id) === String(convId)
+      ? { ...prev, unread_message_count: 0 }
+      : prev
+    );
+  }, []);
+
+  const loadMessages = useCallback(async (convId, markAsRead = false) => {
     try {
       const res  = await chatService.getMessages(convId);
       const msgs = res.data?.data || res.data || [];
       setMessages(msgs);
+      if (markAsRead) await markConversationAsRead(convId);
     } catch {}
-  }, []);
+  }, [markConversationAsRead]);
 
   const loadActiveCallSession = useCallback(async (convId) => {
     try {
@@ -102,9 +117,9 @@ export default function Chat() {
     setActiveConv(conv);
     setActiveCallSession(null);
     setMobileView('chat');
-    loadMessages(conv.id);
+    loadMessages(conv.id, true);
     clearInterval(pollRef.current);
-    pollRef.current = setInterval(() => loadMessages(conv.id), 4000);
+    pollRef.current = setInterval(() => loadMessages(conv.id, true), 4000);
   };
 
   useEffect(() => {
@@ -295,6 +310,7 @@ export default function Chat() {
               const isActive = activeConv?.id === conv.id;
               const lastMsg  = conv.last_message?.message || conv.last_message?.body || '';
               const propertyLabel = getPropertyLabel(conv);
+              const unreadMessageCount = Number(conv.unread_message_count || 0);
 
               return (
                 <button key={conv.id} onClick={() => openConversation(conv)}
@@ -311,11 +327,18 @@ export default function Chat() {
                       <span className={`text-sm font-medium truncate ${isActive ? 'text-gold' : 'text-cream/80'}`}>
                         {other?.name || 'User'}
                       </span>
-                      {conv.last_message?.created_at && (
-                        <span className="text-[10px] text-cream/25 shrink-0 ml-2">
-                          {format(new Date(conv.last_message.created_at), 'HH:mm')}
-                        </span>
-                      )}
+                      <span className="ml-2 flex shrink-0 items-center gap-1.5">
+                        {unreadMessageCount > 0 && (
+                          <span className="min-w-5 rounded-full border border-gold/50 bg-gold px-1.5 py-0.5 text-center text-[10px] font-semibold leading-none text-[#0e0e1c] shadow-[0_0_18px_rgba(201,168,76,0.18)]">
+                            {unreadMessageCount}
+                          </span>
+                        )}
+                        {conv.last_message?.created_at && (
+                          <span className="text-[10px] text-cream/25">
+                            {format(new Date(conv.last_message.created_at), 'HH:mm')}
+                          </span>
+                        )}
+                      </span>
                     </div>
                     <p className="text-xs text-cream/35 truncate">
                       {propertyLabel || lastMsg || 'Start a conversation'}

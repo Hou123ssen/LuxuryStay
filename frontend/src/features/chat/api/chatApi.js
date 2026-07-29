@@ -8,6 +8,7 @@ export const chatService = {
 
   getMessages:        (conversationId)  => api.get(`/messages/${conversationId}`),
   sendMessage:        (data)            => api.post('/messages', data),
+  markConversationAsRead: (conversationId) => api.post(`/conversations/${conversationId}/read`),
   getActiveCallSession: (conversationId) => api.get(`/conversations/${conversationId}/call-sessions/active`),
   createCallSession:  (conversationId)  => api.post(`/conversations/${conversationId}/call-sessions`),
   endCallSession:     (callSessionId)   => api.post(`/call-sessions/${callSessionId}/end`),

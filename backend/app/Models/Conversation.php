@@ -28,6 +28,11 @@ class Conversation extends Model
         return $this->hasMany(Message::class);
     }
 
+    public function reads()
+    {
+        return $this->hasMany(ConversationRead::class);
+    }
+
     public function callSessions()
     {
         return $this->hasMany(CallSession::class);
