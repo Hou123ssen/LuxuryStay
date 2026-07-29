@@ -60,7 +60,13 @@ VITE_API_URL=https://luxurystay.example.com/api npm run build
 * The frontend `VITE_API_URL` must end with **`/api`**.
 * The `STORAGE_URL` is auto-derived by stripping `/api` for image assets.
 
-## 4. Best Practices
+## 4. Audio Calls and HTTPS
+
+Mobile audio calls require HTTPS because browsers only allow microphone and WebRTC access in a secure context. Local LAN HTTP URLs such as `http://192.168.x.x:3000` are not valid for microphone/WebRTC testing.
+
+For production, use `VITE_API_URL=https://your-api-domain.com/api`. The frontend and backend must both be served over HTTPS.
+
+## 5. Best Practices
 
 1. **Never commit `.env`** — it is already in `.gitignore`.
 2. **Use `.env.example`** as a public template with placeholder values.
@@ -68,7 +74,7 @@ VITE_API_URL=https://luxurystay.example.com/api npm run build
 4. **Use `STORAGE_URL`** exported from `services/api.js` for image URLs instead of manual string manipulation.
 5. **Production**: build on CI/CD (GitHub Actions / Vercel / Netlify) and inject `VITE_API_URL` via environment secrets.
 
-## 5. Backend (Laravel) Configuration
+## 6. Backend (Laravel) Configuration
 
 Ensure your Laravel API is properly configured:
 
@@ -86,7 +92,7 @@ For production:
 - Configure CORS to allow frontend domain
 
 
-## 6. CORS Configuration
+## 7. CORS Configuration
 
 Make sure your Laravel API allows requests from your frontend:
 
@@ -97,7 +103,7 @@ config/cors.php:
     'https://your-frontend-domain.com',
 ],
 
-## 7. Image URLs
+## 8. Image URLs
 
 Images are served from Laravel storage:
 
@@ -109,7 +115,7 @@ Make sure:
 - Use STORAGE_URL helper in frontend
 
 
-## 8. Deployment Options
+## 9. Deployment Options
 
 Frontend:
 - Vercel (recommended)
@@ -124,7 +130,7 @@ Example:
 Frontend → https://luxurystay.vercel.app  
 Backend → https://luxurystay-api.onrender.com
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 - API not working:
   → Check VITE_API_URL

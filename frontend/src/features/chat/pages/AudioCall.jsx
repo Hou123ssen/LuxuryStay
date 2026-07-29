@@ -15,6 +15,33 @@ import { chatService } from '../api/chatApi';
 import { useJitsiAudioCall } from '../hooks/useJitsiAudioCall';
 import { useLibJitsiAudioCall } from '../hooks/useLibJitsiAudioCall';
 
+const SECURE_CONTEXT_AUDIO_MESSAGE = 'Audio calls require HTTPS on mobile. Use localhost on desktop or open LuxurrStay from a secure HTTPS URL.';
+const MICROPHONE_UNAVAILABLE_MESSAGE = 'Microphone access is not available in this browser or connection.';
+
+function getAudioCapability() {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    return { canInitialize: false, status: 'Checking call security', message: '' };
+  }
+
+  if (!window.isSecureContext) {
+    return {
+      canInitialize: false,
+      status: 'Secure connection required',
+      message: SECURE_CONTEXT_AUDIO_MESSAGE,
+    };
+  }
+
+  if (!navigator.mediaDevices?.getUserMedia) {
+    return {
+      canInitialize: false,
+      status: 'Microphone unavailable',
+      message: MICROPHONE_UNAVAILABLE_MESSAGE,
+    };
+  }
+
+  return { canInitialize: true, status: '', message: '' };
+}
+
 export default function AudioCall() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
@@ -28,19 +55,26 @@ export default function AudioCall() {
   const isDebugJitsi = searchParams.get('debug_jitsi') === '1';
   const isDebugAudio = searchParams.get('debug_audio') === '1';
   const providerContainerRef = useRef(null);
+  const activeCallPollRef = useRef(null);
+  const remoteEndTimerRef = useRef(null);
+  const localLeaveRef = useRef(false);
+  const remoteEndedRef = useRef(false);
+  const hasNavigatedRef = useRef(false);
   const [conversation, setConversation] = useState(null);
   const [callSession, setCallSession] = useState(location.state?.callSession || null);
   const [loading, setLoading] = useState(true);
   const [isLoadingCallSession, setIsLoadingCallSession] = useState(!location.state?.callSession);
   const [isLeaving, setIsLeaving] = useState(false);
+  const [callEndedRemotely, setCallEndedRemotely] = useState(false);
   const [callError, setCallError] = useState('');
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
   const [isPrejoinFallbackActive, setIsPrejoinFallbackActive] = useState(false);
   const handleProviderMutedChange = useCallback((muted) => setIsMuted(muted), []);
+  const audioCapability = useMemo(() => getAudioCapability(), []);
 
   const iframeAudio = useJitsiAudioCall({
-    callSession: isIframeEngine ? callSession : null,
+    callSession: isIframeEngine && audioCapability.canInitialize ? callSession : null,
     parentRef: providerContainerRef,
     userName: user?.name,
     debug: isDebugJitsi,
@@ -50,7 +84,7 @@ export default function AudioCall() {
   const libJitsiAudio = useLibJitsiAudioCall({
     callSession,
     userName: user?.name,
-    enabled: isLibJitsiEngine,
+    enabled: isLibJitsiEngine && audioCapability.canInitialize,
     debug: isDebugAudio,
     transport: audioTransport,
   });
@@ -128,9 +162,44 @@ export default function AudioCall() {
       .join(' - ');
   }, [conversation]);
 
-  const backToChat = async () => {
-    if (isLeaving) return;
+  const navigateToChat = useCallback(() => {
+    if (hasNavigatedRef.current) return;
 
+    hasNavigatedRef.current = true;
+    if (conversationId) {
+      navigate(`/chat?conversation_id=${conversationId}`);
+      return;
+    }
+
+    navigate('/chat');
+  }, [conversationId, navigate]);
+
+  const handleRemoteCallEnded = useCallback(() => {
+    if (localLeaveRef.current || remoteEndedRef.current || hasNavigatedRef.current) return;
+
+    remoteEndedRef.current = true;
+    clearInterval(activeCallPollRef.current);
+    setCallEndedRemotely(true);
+    setIsPrejoinFallbackActive(false);
+
+    try {
+      hangUpProvider();
+    } catch (err) {
+      console.error('Failed to clean up remote-ended call:', err);
+    }
+
+    clearTimeout(remoteEndTimerRef.current);
+    remoteEndTimerRef.current = window.setTimeout(() => {
+      navigateToChat();
+    }, 2000);
+  }, [hangUpProvider, navigateToChat]);
+
+  const backToChat = async () => {
+    if (isLeaving || callEndedRemotely || hasNavigatedRef.current) return;
+
+    localLeaveRef.current = true;
+    clearInterval(activeCallPollRef.current);
+    clearTimeout(remoteEndTimerRef.current);
     setIsLeaving(true);
     try {
       hangUpProvider();
@@ -142,23 +211,54 @@ export default function AudioCall() {
       console.error('Failed to end call session:', err);
     }
 
-    if (conversationId) {
-      navigate(`/chat?conversation_id=${conversationId}`);
-      return;
-    }
-
-    navigate('/chat');
+    navigateToChat();
   };
 
   const toggleMute = () => {
-    if (!isProviderReady) return;
+    if (!isProviderReady || callEndedRemotely) return;
     toggleAudio();
   };
 
   const retryCall = () => {
-    if (isLeaving) return;
+    if (isLeaving || callEndedRemotely) return;
     window.location.reload();
   };
+
+  useEffect(() => {
+    clearInterval(activeCallPollRef.current);
+
+    if (!conversationId || !callSession?.id || isLeaving || callEndedRemotely) {
+      return undefined;
+    }
+
+    let active = true;
+    const checkActiveCall = async () => {
+      try {
+        const res = await chatService.getActiveCallSession(conversationId);
+        if (!active || localLeaveRef.current || remoteEndedRef.current) return;
+
+        const activeCallSession = res.data?.data || null;
+        if (activeCallSession === null) {
+          handleRemoteCallEnded();
+        }
+      } catch {}
+    };
+
+    checkActiveCall();
+    activeCallPollRef.current = window.setInterval(checkActiveCall, 4000);
+
+    return () => {
+      active = false;
+      clearInterval(activeCallPollRef.current);
+    };
+  }, [callEndedRemotely, callSession?.id, conversationId, handleRemoteCallEnded, isLeaving]);
+
+  useEffect(() => {
+    return () => {
+      clearInterval(activeCallPollRef.current);
+      clearTimeout(remoteEndTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     const canShowFallback = !isLibJitsiEngine
@@ -186,7 +286,13 @@ export default function AudioCall() {
       return () => window.clearTimeout(fallbackTimer);
   }, [callError, isDebugJitsi, isLeaving, isLibJitsiEngine, isProviderReady, providerError, providerStatus]);
 
-  const status = callError || providerError
+  const safeProviderError = !audioCapability.message && providerError
+    ? (isLibJitsiEngine ? providerError : 'Unable to connect the secure audio call.')
+    : '';
+
+  const status = callEndedRemotely
+    ? 'Call ended'
+    : callError || audioCapability.status || safeProviderError
     || (isLeaving
       ? 'Leaving...'
       : isLoadingCallSession
@@ -268,7 +374,7 @@ export default function AudioCall() {
             <button
               type="button"
               onClick={backToChat}
-              disabled={isLeaving}
+              disabled={isLeaving || callEndedRemotely}
               className="flex h-11 w-11 items-center justify-center rounded-full border border-gold/20 bg-white/5 text-cream/70 transition-colors hover:border-gold/50 hover:text-gold"
               aria-label="Back to chat"
             >
@@ -283,7 +389,7 @@ export default function AudioCall() {
             <button
               type="button"
               onClick={backToChat}
-              disabled={isLeaving}
+              disabled={isLeaving || callEndedRemotely}
               className="flex h-11 w-11 items-center justify-center rounded-full border border-gold/20 bg-white/5 text-cream/70 transition-colors hover:border-gold/50 hover:text-gold"
               aria-label="Close call"
             >
@@ -308,7 +414,17 @@ export default function AudioCall() {
             </div>
 
             <p className="mb-2 text-xs uppercase tracking-[0.24em] text-cream/35">{status}</p>
-            {isLibJitsiEngine && providerStatus === 'error' && !isLeaving && (
+            {callEndedRemotely && (
+              <p className="mb-3 max-w-xs text-xs text-gold/70">
+                The other participant left the call. Returning to chat...
+              </p>
+            )}
+            {audioCapability.message && !callEndedRemotely && (
+              <p className="mb-3 max-w-sm rounded-2xl border border-gold/25 bg-gold/10 px-4 py-3 text-sm leading-6 text-cream/80 shadow-[0_18px_60px_rgba(0,0,0,0.24)]">
+                {audioCapability.message}
+              </p>
+            )}
+            {isLibJitsiEngine && providerStatus === 'error' && !isLeaving && !callEndedRemotely && (
               <button
                 type="button"
                 onClick={retryCall}
@@ -350,7 +466,7 @@ export default function AudioCall() {
             <button
               type="button"
               onClick={toggleMute}
-              disabled={!isProviderReady || isLeaving}
+              disabled={!isProviderReady || isLeaving || callEndedRemotely}
               className={`flex flex-col items-center gap-2 rounded-2xl border px-3 py-4 text-xs transition-all ${
                 effectiveMuted
                   ? 'border-gold/45 bg-gold/15 text-gold'
@@ -378,7 +494,7 @@ export default function AudioCall() {
             <button
               type="button"
               onClick={backToChat}
-              disabled={isLeaving}
+              disabled={isLeaving || callEndedRemotely}
               className="flex flex-col items-center gap-2 rounded-2xl border border-red-500/40 bg-red-500/15 px-3 py-4 text-xs text-red-300 transition-all hover:bg-red-500/25 hover:text-red-200"
             >
               <FiPhoneOff size={24} />

@@ -6,6 +6,15 @@ const KMEET_BOSH_URL = 'https://kmeet.infomaniak.com/http-bind';
 const KMEET_FOCUS_USER_JID = 'focus@auth.kmeet.infomaniak.com';
 const KMEET_CLIENT_NODE = 'http://jitsi.org/jitsimeet';
 const libJitsiScriptPromises = new Map();
+const SECURE_CONTEXT_AUDIO_MESSAGE = 'Audio calls require HTTPS on mobile. Use localhost on desktop or open LuxurrStay from a secure HTTPS URL.';
+const MICROPHONE_UNAVAILABLE_MESSAGE = 'Microphone access is not available in this browser or connection.';
+
+function getAudioCapabilityError() {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return '';
+  if (!window.isSecureContext) return SECURE_CONTEXT_AUDIO_MESSAGE;
+  if (!navigator.mediaDevices?.getUserMedia) return MICROPHONE_UNAVAILABLE_MESSAGE;
+  return '';
+}
 
 function loadLibJitsiScript() {
   if (window.JitsiMeetJS) return Promise.resolve();
@@ -312,6 +321,15 @@ export function useLibJitsiAudioCall({ callSession, userName, enabled = false, d
 
     if (!callSession?.room_name) {
       setProviderStatus('idle');
+      setConferenceStatus('idle');
+      return undefined;
+    }
+
+    const capabilityError = getAudioCapabilityError();
+    if (capabilityError) {
+      setProviderError(capabilityError);
+      setLastSafeError(capabilityError);
+      setProviderStatus('error');
       setConferenceStatus('idle');
       return undefined;
     }
