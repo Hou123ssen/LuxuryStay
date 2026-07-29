@@ -18,7 +18,7 @@ class NotificationController extends Controller
                 $decoded = json_decode($n->message, true);
                 return [
                     'id'         => $n->id,
-                    'read'       => $n->read !== null,
+                    'read'       => $n->isRead(),
                     'created_at' => $n->created_at,
                     // إذا JSON → استخدم text، وإلا استخدم message مباشرة
                     'message'    => $decoded['text']    ?? $n->message,
@@ -42,15 +42,28 @@ class NotificationController extends Controller
             ->findOrFail($id)
             ->update(['read' => now()]);
 
-        return response()->json(['message' => 'Marked as read']);
+        return response()->json([
+            'message' => 'Notification marked as read.',
+            'unread_notifications_count' => $this->unreadNotificationsCount((int) Auth::id()),
+        ]);
     }
 
     public function markAllAsRead()
     {
         Notification::where('user_id', Auth::id())
-            ->whereNull('read')
+            ->unread()
             ->update(['read' => now()]);
 
-        return response()->json(['message' => 'All marked as read']);
+        return response()->json([
+            'message' => 'Notifications marked as read.',
+            'unread_notifications_count' => $this->unreadNotificationsCount((int) Auth::id()),
+        ]);
+    }
+
+    private function unreadNotificationsCount(int $userId): int
+    {
+        return Notification::where('user_id', $userId)
+            ->unread()
+            ->count();
     }
 }

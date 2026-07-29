@@ -10,6 +10,7 @@ import {
   startIncomingCallAlert,
   stopIncomingCallAlert,
 } from '../utils/callAlerts';
+import { notifyNavbarCountsChanged } from '../../../shared/utils/navbarCountsEvents';
 
 const CALL_PARTICIPANT_BUSY_MESSAGE = 'This user is currently busy on another call. Please try again later.';
 
@@ -104,6 +105,13 @@ export default function Chat() {
 
   // ── تحميل الرسائل ─────────────────────────────────────────────────────────
   const markConversationAsRead = useCallback(async (convId) => {
+    const hadUnread = conversations.some(c =>
+      String(c.id) === String(convId) && Number(c.unread_message_count || 0) > 0
+    ) || (
+      String(activeConv?.id) === String(convId)
+      && Number(activeConv?.unread_message_count || 0) > 0
+    );
+
     await chatService.markConversationAsRead(convId);
 
     setConversations(prev => prev.map(c =>
@@ -115,7 +123,11 @@ export default function Chat() {
       ? { ...prev, unread_message_count: 0 }
       : prev
     );
-  }, []);
+
+    if (hadUnread) {
+      notifyNavbarCountsChanged();
+    }
+  }, [activeConv?.id, activeConv?.unread_message_count, conversations]);
 
   const loadMessages = useCallback(async (convId, markAsRead = false) => {
     try {

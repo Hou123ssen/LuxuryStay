@@ -1,7 +1,25 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../app/providers/AuthContext';
 import { FiMenu, FiX, FiHeart, FiMessageCircle, FiBell, FiUser, FiLogOut, FiCalendar, FiPlusCircle } from 'react-icons/fi'; // ← FiPlusCircle added
+
+import { navbarCountsService } from '../api/navbarCountsApi';
+import { NAVBAR_COUNTS_REFRESH_EVENT } from '../utils/navbarCountsEvents';
+
+const formatBadgeCount = (count) => {
+  const value = Number(count || 0);
+  return value > 99 ? '99+' : String(value);
+};
+
+const CountBadge = ({ count, className = '' }) => {
+  if (Number(count || 0) <= 0) return null;
+
+  return (
+    <span className={`inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full border border-gold/60 bg-gold px-1.5 text-[10px] font-semibold leading-none text-[#0a0a0f] shadow-[0_0_18px_rgba(201,168,76,0.28)] ${className}`}>
+      {formatBadgeCount(count)}
+    </span>
+  );
+};
 
 export default function Navbar() {
   const { user, logout, isAuth } = useAuth();
@@ -9,6 +27,60 @@ export default function Navbar() {
   const location  = useLocation();
   const [open, setOpen]         = useState(false);
   const [dropdown, setDropdown] = useState(false);
+  const [counts, setCounts] = useState({
+    unread_messages_count: 0,
+    unread_notifications_count: 0,
+  });
+
+  const loadCounts = useCallback(async () => {
+    if (!isAuth) {
+      setCounts({
+        unread_messages_count: 0,
+        unread_notifications_count: 0,
+      });
+      return;
+    }
+
+    try {
+      const res = await navbarCountsService.getCounts();
+      setCounts(res.data?.data || {
+        unread_messages_count: 0,
+        unread_notifications_count: 0,
+      });
+    } catch {
+      // Keep the previous count on transient polling/focus failures.
+    }
+  }, [isAuth]);
+
+  useEffect(() => {
+    if (!isAuth) {
+      setCounts({
+        unread_messages_count: 0,
+        unread_notifications_count: 0,
+      });
+      return undefined;
+    }
+
+    loadCounts();
+    const intervalId = setInterval(loadCounts, 20000);
+    const handleFocus = () => loadCounts();
+    const handleRefresh = (event) => {
+      if (event.detail?.counts) {
+        setCounts(prev => ({ ...prev, ...event.detail.counts }));
+      }
+
+      loadCounts();
+    };
+
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener(NAVBAR_COUNTS_REFRESH_EVENT, handleRefresh);
+
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener(NAVBAR_COUNTS_REFRESH_EVENT, handleRefresh);
+    };
+  }, [isAuth, loadCounts]);
 
   const handleLogout = async () => {
     await logout();
@@ -20,7 +92,7 @@ export default function Navbar() {
         { to: '/properties', label: 'Explore' },
         { to: '/bookings',   label: 'My Stays',  icon: <FiCalendar size={14} /> },
         { to: '/favorites',  label: 'Favorites',  icon: <FiHeart size={14} /> },
-        { to: '/chat',       label: 'Messages',   icon: <FiMessageCircle size={14} /> },
+        { to: '/chat',       label: 'Messages',   icon: <FiMessageCircle size={14} />, badge: counts.unread_messages_count },
       ]
     : [
         { to: '/properties', label: 'Explore' },
@@ -46,6 +118,7 @@ export default function Navbar() {
                   ? 'text-gold' : 'text-cream/60 hover:text-cream'
               }`}>
               {l.icon}{l.label}
+              <CountBadge count={l.badge} />
             </Link>
           ))}
         </div>
@@ -56,6 +129,7 @@ export default function Navbar() {
             <>
               <Link to="/notifications" className="p-2 text-cream/50 hover:text-gold transition-colors relative">
                 <FiBell size={18} />
+                <CountBadge count={counts.unread_notifications_count} className="absolute -right-1 -top-1" />
               </Link>
 
               {/* ← NEW: List Property button */}
@@ -110,11 +184,17 @@ export default function Navbar() {
             <Link key={l.to} to={l.to} onClick={() => setOpen(false)}
               className="flex items-center gap-2 py-3 text-cream/70 hover:text-cream border-b border-white/5 text-sm">
               {l.icon}{l.label}
+              <CountBadge count={l.badge} className="ml-auto" />
             </Link>
           ))}
           {isAuth ? (
             <>
               {/* ← NEW: mobile List Property link */}
+              <Link to="/notifications" onClick={() => setOpen(false)}
+                className="flex items-center gap-2 py-3 text-cream/70 hover:text-cream border-b border-white/5 text-sm">
+                <FiBell size={14} /> Notifications
+                <CountBadge count={counts.unread_notifications_count} className="ml-auto" />
+              </Link>
               <Link to="/properties/new" onClick={() => setOpen(false)}
                 className="flex items-center gap-2 py-3 text-gold/80 border-b border-white/5 text-sm">
                 <FiPlusCircle size={14} /> List a Property

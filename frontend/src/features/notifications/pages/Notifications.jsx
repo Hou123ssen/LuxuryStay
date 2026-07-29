@@ -25,8 +25,21 @@ export default function Notifications() {
   const fetchNotifs = async () => {
     try {
       const res = await notificationService.list();
-      setNotifs(res.data?.data || res.data);
-    } catch {
+      const loaded = res.data?.data || res.data || [];
+      const hasUnread = loaded.some((n) => !n.read);
+
+      if (hasUnread) {
+        const readRes = await notificationService.markAllAsRead();
+        setNotifs(loaded.map((n) => ({ ...n, read: true })));
+        notifyNavbarCountsChanged({
+          unread_notifications_count: readRes.data?.unread_notifications_count ?? 0,
+        });
+      } else {
+        setNotifs(loaded);
+        notifyNavbarCountsChanged();
+      }
+    } catch (err) {
+      console.warn('Could not load or mark notifications as read.', err.response?.status || err.message);
       setNotifs([]);
     }
     setLoad(false);
@@ -38,20 +51,28 @@ export default function Notifications() {
 
   const markAllRead = async () => {
     try {
-      await notificationService.markAllAsRead();
+      const res = await notificationService.markAllAsRead();
       setNotifs((prev) => prev.map((n) => ({ ...n, read: true })));
-      notifyNavbarCountsChanged();
-    } catch {}
+      notifyNavbarCountsChanged({
+        unread_notifications_count: res.data?.unread_notifications_count ?? 0,
+      });
+    } catch (err) {
+      console.warn('Could not mark all notifications as read.', err.response?.status || err.message);
+    }
   };
 
   const markOneRead = async (id) => {
     try {
-      await notificationService.markAsRead(id);
+      const res = await notificationService.markAsRead(id);
       setNotifs((prev) =>
         prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
       );
-      notifyNavbarCountsChanged();
-    } catch {}
+      notifyNavbarCountsChanged({
+        unread_notifications_count: res.data?.unread_notifications_count,
+      });
+    } catch (err) {
+      console.warn('Could not mark notification as read.', err.response?.status || err.message);
+    }
   };
 
   const handleAccept = async (notif) => {

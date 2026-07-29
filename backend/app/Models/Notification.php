@@ -13,8 +13,23 @@ class Notification extends Model
     ];
 
     protected $casts = [
-        'read' => 'boolean',
+        'read' => 'datetime',
     ];
+
+    public function scopeUnread($query)
+    {
+        return $query->where(function ($query) {
+            $query->whereNull('read')
+                ->orWhere('read', false)
+                ->orWhere('read', 0)
+                ->orWhere('read', '0');
+        });
+    }
+
+    public function isRead(): bool
+    {
+        return ! in_array($this->getRawOriginal('read'), [null, false, 0, '0'], true);
+    }
 
     public function user()
     {

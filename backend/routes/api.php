@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\ChatController;
 use App\Http\Controllers\Api\ConversationController;
 use App\Http\Controllers\Api\FavoriteController;
 use App\Http\Controllers\Api\ImageController;
+use App\Http\Controllers\Api\NavbarCountsController;
 use App\Http\Controllers\Api\NotificationController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\BookingController;
@@ -20,6 +21,8 @@ Route::get('/properties/{property}/availability', [PropertyController::class, 'a
 
 
 Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/navbar-counts', NavbarCountsController::class);
+
     // API ROUTES FOR POPERTIES :
     Route::get('/properties', [PropertyController::class, 'index']);
     Route::get('/properties/{id}', [PropertyController::class, 'show']);
