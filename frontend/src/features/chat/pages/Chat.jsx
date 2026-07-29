@@ -2,9 +2,24 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { chatService } from '../api/chatApi';
 import { format } from 'date-fns';
-import { FiSend, FiMessageCircle, FiSearch, FiChevronLeft, FiPhone } from 'react-icons/fi';
+import { FiBell, FiSend, FiMessageCircle, FiSearch, FiChevronLeft, FiPhone, FiPhoneOff } from 'react-icons/fi';
 import { useAuth } from '../../../app/providers/AuthContext';
 import toast from 'react-hot-toast';
+import {
+  enableIncomingCallAlerts,
+  startIncomingCallAlert,
+  stopIncomingCallAlert,
+} from '../utils/callAlerts';
+
+const CALL_PARTICIPANT_BUSY_MESSAGE = 'This user is currently busy on another call. Please try again later.';
+
+const getCallErrorMessage = (err, fallback) => {
+  if (err.response?.data?.code === 'CALL_PARTICIPANT_BUSY') {
+    return CALL_PARTICIPANT_BUSY_MESSAGE;
+  }
+
+  return err.response?.data?.message || fallback;
+};
 
 export default function Chat() {
   const { user }         = useAuth();
@@ -19,10 +34,17 @@ export default function Chat() {
   const [sending,        setSending]        = useState(false);
   const [isStartingCall, setIsStartingCall] = useState(false);
   const [activeCallSession, setActiveCallSession] = useState(null);
+  const [incomingCallSession, setIncomingCallSession] = useState(null);
+  const [isHandlingCall, setIsHandlingCall] = useState(false);
+  const [callAlertsEnabled, setCallAlertsEnabled] = useState(
+    () => localStorage.getItem('luxurrstay_call_alerts_enabled') === 'true'
+  );
+  const [callAlertBlocked, setCallAlertBlocked] = useState(false);
   const [mobileView,     setMobileView]     = useState('list');
   const bottomRef = useRef(null);
   const pollRef   = useRef(null);
   const activeCallPollRef = useRef(null);
+  const incomingCallPollRef = useRef(null);
 
   const upsertConversation = (conversation) => {
     if (!conversation?.id) return;
@@ -107,11 +129,60 @@ export default function Chat() {
   const loadActiveCallSession = useCallback(async (convId) => {
     try {
       const res = await chatService.getActiveCallSession(convId);
-      setActiveCallSession(res.data?.data || null);
+      const callSession = res.data?.data || null;
+      if (callSession) {
+        setActiveCallSession(callSession);
+        return;
+      }
+
+      setActiveCallSession(prev => {
+        if (!prev || String(prev.conversation_id) !== String(convId)) return null;
+
+        if (prev.status === 'ringing' && String(prev.started_by_id) === String(user?.id)) {
+          chatService.getCurrentCall()
+            .then((currentRes) => {
+              const currentCall = currentRes.data?.data || null;
+              if (String(currentCall?.id) === String(prev.id)) {
+                const label = currentCall.status === 'missed'
+                  ? 'Call missed.'
+                  : currentCall.status === 'declined'
+                    ? 'Call declined.'
+                    : 'Call ended.';
+                toast(label);
+              } else {
+                toast('Call ended.');
+              }
+            })
+            .catch(() => toast('Unable to refresh call status.'));
+        }
+
+        return null;
+      });
     } catch {
       setActiveCallSession(null);
     }
-  }, []);
+  }, [user?.id]);
+
+  const loadIncomingCall = useCallback(async () => {
+    if (!user?.id) {
+      setIncomingCallSession(null);
+      return;
+    }
+
+    try {
+      const res = await chatService.getIncomingCall();
+      const callSession = res.data?.data || null;
+      setIncomingCallSession(
+        callSession
+          && callSession.status === 'ringing'
+          && String(callSession.started_by_id) !== String(user.id)
+          ? callSession
+          : null
+      );
+    } catch {
+      setIncomingCallSession(null);
+    }
+  }, [user?.id]);
 
   const openConversation = (conv) => {
     setActiveConv(conv);
@@ -135,6 +206,55 @@ export default function Chat() {
 
     return () => clearInterval(activeCallPollRef.current);
   }, [activeConv?.id, loadActiveCallSession]);
+
+  useEffect(() => {
+    clearInterval(incomingCallPollRef.current);
+
+    if (!user?.id) {
+      setIncomingCallSession(null);
+      return undefined;
+    }
+
+    loadIncomingCall();
+    incomingCallPollRef.current = setInterval(loadIncomingCall, 4000);
+
+    return () => {
+      clearInterval(incomingCallPollRef.current);
+      stopIncomingCallAlert();
+    };
+  }, [loadIncomingCall, user?.id]);
+
+  useEffect(() => {
+    let active = true;
+
+    if (!incomingCallSession?.id) {
+      stopIncomingCallAlert();
+      setCallAlertBlocked(false);
+      return undefined;
+    }
+
+    startIncomingCallAlert().then((result) => {
+      if (!active) return;
+      setCallAlertBlocked(!!result?.soundBlocked || !result?.soundEnabled);
+    });
+
+    return () => {
+      active = false;
+      stopIncomingCallAlert();
+    };
+  }, [incomingCallSession?.id]);
+
+  useEffect(() => {
+    if (
+      activeCallSession?.status === 'accepted'
+      && String(activeCallSession.started_by_id) === String(user?.id)
+      && activeCallSession.conversation_id
+    ) {
+      navigate(`/call?conversation_id=${activeCallSession.conversation_id}&call_session_id=${activeCallSession.id}`, {
+        state: { callSession: activeCallSession },
+      });
+    }
+  }, [activeCallSession, navigate, user?.id]);
 
   // ── scroll للأسفل عند رسالة جديدة ─────────────────────────────────────────
   useEffect(() => {
@@ -206,13 +326,79 @@ export default function Chat() {
 
       if (!callSession?.id) throw new Error('Call session missing id.');
 
-      navigate(`/call?conversation_id=${activeConv.id}&call_session_id=${callSession.id}`, {
+      setActiveCallSession(callSession);
+
+      if (callSession.status === 'accepted') {
+        navigate(`/call?conversation_id=${activeConv.id}&call_session_id=${callSession.id}`, {
+          state: { callSession },
+        });
+      }
+    } catch (err) {
+      toast.error(getCallErrorMessage(err, 'Unable to start call. Please try again.'));
+    } finally {
+      setIsStartingCall(false);
+    }
+  };
+
+  const enableCallAlerts = async () => {
+    try {
+      const enabled = await enableIncomingCallAlerts();
+      setCallAlertsEnabled(enabled);
+      setCallAlertBlocked(!enabled);
+      toast.success(enabled ? 'Call alerts enabled' : 'Call alerts are not supported in this browser');
+    } catch {
+      setCallAlertBlocked(true);
+      toast.error('Could not enable call alerts in this browser');
+    }
+  };
+
+  const acceptIncomingCall = async () => {
+    if (!incomingCallSession?.id || isHandlingCall) return;
+
+    setIsHandlingCall(true);
+    try {
+      const res = await chatService.acceptCallSession(incomingCallSession.id);
+      const callSession = res.data?.data || res.data;
+      stopIncomingCallAlert();
+      setIncomingCallSession(null);
+      setActiveCallSession(callSession);
+      navigate(`/call?conversation_id=${callSession.conversation_id}&call_session_id=${callSession.id}`, {
         state: { callSession },
       });
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Unable to start call. Please try again.');
+      toast.error(getCallErrorMessage(err, 'Unable to accept call.'));
     } finally {
-      setIsStartingCall(false);
+      setIsHandlingCall(false);
+    }
+  };
+
+  const declineIncomingCall = async () => {
+    if (!incomingCallSession?.id || isHandlingCall) return;
+
+    setIsHandlingCall(true);
+    try {
+      await chatService.declineCallSession(incomingCallSession.id);
+      stopIncomingCallAlert();
+      setIncomingCallSession(null);
+      setActiveCallSession(null);
+    } catch (err) {
+      toast.error(getCallErrorMessage(err, 'Unable to decline call.'));
+    } finally {
+      setIsHandlingCall(false);
+    }
+  };
+
+  const cancelOutgoingCall = async () => {
+    if (!activeCallSession?.id || isHandlingCall) return;
+
+    setIsHandlingCall(true);
+    try {
+      await chatService.endCallSession(activeCallSession.id);
+      setActiveCallSession(null);
+    } catch (err) {
+      toast.error(getCallErrorMessage(err, 'Unable to end call.'));
+    } finally {
+      setIsHandlingCall(false);
     }
   };
 
@@ -244,6 +430,15 @@ export default function Chat() {
       .join(' - ');
   };
 
+  const getCallPropertyLabel = (callSession) => {
+    const property = callSession?.conversation?.property;
+    if (!property) return getPropertyLabel(activeConv);
+
+    return [property.title || property.name, property.city]
+      .filter(Boolean)
+      .join(' - ');
+  };
+
   // ── اسم المرسل ─────────────────────────────────────────────────────────────
   const getSenderName = (msg) => {
     if (isOwn(msg)) return 'You';
@@ -270,7 +465,22 @@ export default function Chat() {
 
         {/* Header */}
         <div className="px-5 py-4 border-b" style={{ borderColor: 'rgba(201,168,76,0.1)' }}>
-          <h2 className="font-display text-xl text-cream mb-3">Messages</h2>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="font-display text-xl text-cream">Messages</h2>
+            <button
+              type="button"
+              onClick={enableCallAlerts}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[10px] transition-colors ${
+                callAlertsEnabled
+                  ? 'border-gold/35 bg-gold/10 text-gold'
+                  : 'border-white/10 bg-white/5 text-cream/45 hover:border-gold/35 hover:text-gold'
+              }`}
+            >
+              <FiBell size={12} />
+              <span className="hidden lg:inline">{callAlertsEnabled ? 'Alerts on' : 'Enable call alerts'}</span>
+              <span className="lg:hidden">Alerts</span>
+            </button>
+          </div>
           <div className="relative">
             <FiSearch size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-cream/30" />
             <input placeholder="Search conversations…"
@@ -394,7 +604,7 @@ export default function Chat() {
             </div>
 
             {/* ══ الرسائل ══ */}
-            {activeCallSession && (
+            {activeCallSession && !incomingCallSession && (
               <div
                 className="border-b px-4 py-3 sm:px-5"
                 style={{
@@ -410,20 +620,34 @@ export default function Chat() {
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-cream">Active audio call</p>
                       <p className="text-xs text-cream/45">
-                        {String(activeCallSession.started_by_id) === String(user?.id)
-                          ? 'Your secure call is active.'
-                          : 'The other participant started a secure audio call.'}
+                        {activeCallSession.status === 'ringing'
+                          ? 'Calling... waiting for an answer.'
+                          : String(activeCallSession.started_by_id) === String(user?.id)
+                            ? 'Your secure call was accepted.'
+                            : 'The other participant started a secure audio call.'}
                       </p>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={joinActiveCall}
-                    className="inline-flex items-center justify-center gap-1.5 rounded-full border border-gold/35 bg-gold/15 px-4 py-2 text-xs font-medium text-gold transition-colors hover:border-gold hover:bg-gold/20"
-                  >
-                    <FiPhone size={13} />
-                    Join call
-                  </button>
+                  {activeCallSession.status === 'ringing' && String(activeCallSession.started_by_id) === String(user?.id) ? (
+                    <button
+                      type="button"
+                      onClick={cancelOutgoingCall}
+                      disabled={isHandlingCall}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-full border border-red-500/35 bg-red-500/15 px-4 py-2 text-xs font-medium text-red-200 transition-colors hover:bg-red-500/25 disabled:cursor-wait disabled:opacity-60"
+                    >
+                      <FiPhoneOff size={13} />
+                      Cancel
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={joinActiveCall}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-full border border-gold/35 bg-gold/15 px-4 py-2 text-xs font-medium text-gold transition-colors hover:border-gold hover:bg-gold/20"
+                    >
+                      <FiPhone size={13} />
+                      Join call
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -508,6 +732,59 @@ export default function Chat() {
           </div>
         )}
       </div>
+
+      {incomingCallSession && (
+        <div className="fixed inset-0 z-[420] flex items-center justify-center bg-black/70 px-5 text-cream backdrop-blur-md">
+          <div className="relative w-full max-w-sm overflow-hidden rounded-[2rem] border border-gold/25 bg-[#0e0e1c]/95 px-6 py-7 text-center shadow-[0_30px_120px_rgba(0,0,0,0.6),0_0_80px_rgba(201,168,76,0.14)]">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(201,168,76,0.18),transparent_42%)]" />
+            <div className="relative">
+              <p className="mb-2 text-[10px] uppercase tracking-[0.28em] text-gold/70">Incoming audio call</p>
+              <div className="relative mx-auto my-6 flex h-36 w-36 items-center justify-center">
+                <div className="absolute inset-0 rounded-full border border-gold/20 animate-ping" />
+                <div className="absolute inset-5 rounded-full border border-gold/15 animate-pulse" />
+                <div className="absolute inset-2 rounded-full bg-gold/5 blur-2xl" />
+                <div className="relative flex h-24 w-24 items-center justify-center rounded-full border border-gold/35 bg-gold/15 font-display text-4xl text-gold">
+                  {getAvatar(incomingCallSession.started_by?.name)}
+                </div>
+              </div>
+              <h3 className="font-display text-3xl text-cream">
+                {incomingCallSession.started_by?.name || 'Guest'}
+              </h3>
+              <p className="mt-2 text-sm text-gold/65">{getCallPropertyLabel(incomingCallSession)}</p>
+              {callAlertBlocked && (
+                <button
+                  type="button"
+                  onClick={enableCallAlerts}
+                  className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-gold/30 bg-gold/10 px-3 py-1.5 text-xs text-gold transition-colors hover:border-gold"
+                >
+                  <FiBell size={12} />
+                  Tap Enable call alerts for sound
+                </button>
+              )}
+              <div className="mt-7 grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={declineIncomingCall}
+                  disabled={isHandlingCall}
+                  className="flex items-center justify-center gap-2 rounded-2xl border border-red-500/35 bg-red-500/15 px-4 py-3 text-sm font-medium text-red-200 transition-colors hover:bg-red-500/25 disabled:cursor-wait disabled:opacity-60"
+                >
+                  <FiPhoneOff size={18} />
+                  Decline
+                </button>
+                <button
+                  type="button"
+                  onClick={acceptIncomingCall}
+                  disabled={isHandlingCall}
+                  className="flex items-center justify-center gap-2 rounded-2xl border border-gold/45 bg-gold px-4 py-3 text-sm font-semibold text-[#0e0e1c] transition-colors hover:bg-gold/90 disabled:cursor-wait disabled:opacity-60"
+                >
+                  <FiPhone size={18} />
+                  Accept
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -16,6 +16,10 @@ function getAudioCapabilityError() {
   return '';
 }
 
+function hasMicrophoneCapability() {
+  return typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
+}
+
 function loadLibJitsiScript() {
   if (window.JitsiMeetJS) return Promise.resolve();
   if (libJitsiScriptPromises.has(LIB_JITSI_URL)) return libJitsiScriptPromises.get(LIB_JITSI_URL);
@@ -103,6 +107,7 @@ export function useLibJitsiAudioCall({ callSession, userName, enabled = false, d
   const remoteAudioRefs = useRef(new Map());
   const mountedRef = useRef(false);
   const cleaningUpRef = useRef(false);
+  const connectionEstablishedRef = useRef(false);
   const cleanupRef = useRef(() => {});
   const conferenceCleanupRef = useRef(() => {});
   const [providerStatus, setProviderStatus] = useState('idle');
@@ -197,6 +202,7 @@ export function useLibJitsiAudioCall({ callSession, userName, enabled = false, d
     conferenceRef.current = null;
     connectionRef.current = null;
     localTrackRef.current = null;
+    connectionEstablishedRef.current = false;
 
     conferenceCleanupRef.current?.();
     conferenceCleanupRef.current = () => {};
@@ -248,6 +254,13 @@ export function useLibJitsiAudioCall({ callSession, userName, enabled = false, d
     cleaningUpRef.current = false;
     trackEvent('cleanupFinished');
   }, [debug, setSafeState, trackEvent]);
+
+  const failProvider = useCallback((error) => {
+    setSafeError(error);
+    cleanupProvider().finally(() => {
+      setSafeState(setProviderStatus, 'error');
+    });
+  }, [cleanupProvider, setSafeError, setSafeState]);
 
   const attachRemoteTrack = useCallback((track) => {
     if (track?.isLocal?.() || track?.getType?.() !== 'audio') return;
@@ -342,6 +355,7 @@ export function useLibJitsiAudioCall({ callSession, userName, enabled = false, d
     setLastFailureArgs([]);
     setConnectionFailedCode('');
     setConnectionEstablished(false);
+    connectionEstablishedRef.current = false;
     setConferenceJoinInProgress(false);
     setRequiresPlaybackGesture(false);
     setRemoteAudioCount(0);
@@ -413,6 +427,7 @@ export function useLibJitsiAudioCall({ callSession, userName, enabled = false, d
           setSafeState(setProviderStatus, 'joining');
           setSafeState(setConferenceStatus, 'joining');
           setSafeState(setConnectionEstablished, true);
+          connectionEstablishedRef.current = true;
           setSafeState(setConferenceJoinInProgress, true);
           trackEvent('connectionEstablished');
 
@@ -442,13 +457,13 @@ export function useLibJitsiAudioCall({ callSession, userName, enabled = false, d
             trackEvent('conferenceFailed', safeDiagnosticArgs(args));
             captureFailure('conferenceFailed', args);
             setSafeState(setConferenceJoinInProgress, false);
-            setSafeError(args[0]);
+            failProvider(args[0]);
           };
           const onConferenceError = (...args) => {
             if (!active) return;
             trackEvent('conferenceError', safeDiagnosticArgs(args));
             captureFailure('conferenceError', args);
-            setSafeError(args[0]);
+            failProvider(args[0]);
           };
           const onUserLeft = (id) => {
             if (!active) return;
@@ -491,12 +506,12 @@ export function useLibJitsiAudioCall({ callSession, userName, enabled = false, d
           if (!active) return;
           trackEvent('connectionFailed', safeDiagnosticArgs(args));
           captureFailure('connectionFailed', args);
-          setSafeError(args[0]);
+          failProvider(args[0]);
         };
 
         const onConnectionDisconnected = () => {
           if (!active) return;
-          setSafeState(setProviderStatus, 'disconnected');
+          setSafeState(setProviderStatus, connectionEstablishedRef.current ? 'reconnecting' : 'disconnected');
           setSafeState(setConferenceStatus, 'disconnected');
           setSafeState(setConferenceJoinInProgress, false);
           trackEvent('connectionDisconnected');
@@ -532,6 +547,7 @@ export function useLibJitsiAudioCall({ callSession, userName, enabled = false, d
     detachRemoteTrack,
     detachRemoteTracksForParticipant,
     enabled,
+    failProvider,
     setSafeError,
     setSafeState,
     trackEvent,
@@ -541,25 +557,23 @@ export function useLibJitsiAudioCall({ callSession, userName, enabled = false, d
 
   const diagnostics = useMemo(() => ({
     engine: 'lib-jitsi-meet',
+    secureContext: typeof window !== 'undefined' ? !!window.isSecureContext : false,
+    microphoneCapability: hasMicrophoneCapability(),
     scriptLoaded: isScriptLoaded,
     connectionStatus: providerStatus,
     conferenceStatus,
-    roomName: callSession?.room_name || '',
     localAudioTrackCreated: isLocalTrackCreated,
     remoteAudioTrackCount: remoteAudioCount,
     lastEvent: lastProviderEvent,
-    lastSafeError,
+    lastSafeErrorCategory: lastSafeError ? 'provider_error' : '',
     selectedTransport,
     connectionEstablished,
     conferenceJoinInProgress,
     lastFailureEvent,
     lastFailureArgs,
     connectionFailedCode,
-    focusUserJidConfigured: true,
-    clientNode: KMEET_CLIENT_NODE,
     requiresPlaybackGesture,
   }), [
-    callSession?.room_name,
     conferenceStatus,
     isLocalTrackCreated,
     isScriptLoaded,

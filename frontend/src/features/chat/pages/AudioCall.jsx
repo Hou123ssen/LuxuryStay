@@ -70,11 +70,14 @@ export default function AudioCall() {
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
   const [isPrejoinFallbackActive, setIsPrejoinFallbackActive] = useState(false);
+  const [callPollFailures, setCallPollFailures] = useState(0);
   const handleProviderMutedChange = useCallback((muted) => setIsMuted(muted), []);
   const audioCapability = useMemo(() => getAudioCapability(), []);
+  const canInitializeAudioEngine = audioCapability.canInitialize
+    && (callSession?.status === 'accepted' || callSession?.status === 'active');
 
   const iframeAudio = useJitsiAudioCall({
-    callSession: isIframeEngine && audioCapability.canInitialize ? callSession : null,
+    callSession: isIframeEngine && canInitializeAudioEngine ? callSession : null,
     parentRef: providerContainerRef,
     userName: user?.name,
     debug: isDebugJitsi,
@@ -84,7 +87,7 @@ export default function AudioCall() {
   const libJitsiAudio = useLibJitsiAudioCall({
     callSession,
     userName: user?.name,
-    enabled: isLibJitsiEngine && audioCapability.canInitialize,
+    enabled: isLibJitsiEngine && canInitializeAudioEngine,
     debug: isDebugAudio,
     transport: audioTransport,
   });
@@ -137,8 +140,21 @@ export default function AudioCall() {
       setCallError('');
 
       try {
-        const res = await chatService.createCallSession(conversationId);
-        const session = res.data?.data || res.data;
+        let session = null;
+
+        if (callSessionId) {
+          const activeRes = await chatService.getActiveCallSession(conversationId);
+          const activeSession = activeRes.data?.data || null;
+
+          if (String(activeSession?.id) === String(callSessionId)) {
+            session = activeSession;
+          }
+        }
+
+        if (!session) {
+          const res = await chatService.createCallSession(conversationId);
+          session = res.data?.data || res.data;
+        }
 
         if (active) setCallSession(session);
       } catch {
@@ -237,11 +253,30 @@ export default function AudioCall() {
         const res = await chatService.getActiveCallSession(conversationId);
         if (!active || localLeaveRef.current || remoteEndedRef.current) return;
 
+        setCallPollFailures(0);
         const activeCallSession = res.data?.data || null;
         if (activeCallSession === null) {
+          try {
+            const currentRes = await chatService.getCurrentCall();
+            const currentCall = currentRes.data?.data || null;
+            if (String(currentCall?.id) === String(callSession.id)) {
+              setCallSession(currentCall);
+            }
+          } catch {}
           handleRemoteCallEnded();
+        } else if (String(activeCallSession.id) === String(callSession.id)) {
+          setCallSession(activeCallSession);
         }
-      } catch {}
+      } catch {
+        if (!active) return;
+        setCallPollFailures(value => {
+          const next = value + 1;
+          if (next >= 3) {
+            setCallError('Unable to refresh call status. Check your connection and try again.');
+          }
+          return next;
+        });
+      }
     };
 
     checkActiveCall();
@@ -289,14 +324,25 @@ export default function AudioCall() {
   const safeProviderError = !audioCapability.message && providerError
     ? (isLibJitsiEngine ? providerError : 'Unable to connect the secure audio call.')
     : '';
+  const terminalCallLabel = callSession?.status === 'missed'
+    ? 'Call missed'
+    : callSession?.status === 'declined'
+      ? 'Call declined'
+      : callSession?.status === 'ended'
+        ? 'Call ended'
+        : '';
 
   const status = callEndedRemotely
-    ? 'Call ended'
+    ? terminalCallLabel || 'Call ended'
     : callError || audioCapability.status || safeProviderError
     || (isLeaving
       ? 'Leaving...'
       : isLoadingCallSession
         ? 'Loading call session'
+        : callSession?.status === 'ringing'
+          ? String(callSession.started_by_id) === String(user?.id)
+            ? 'Calling...'
+            : 'Waiting for call acceptance'
         : providerStatus === 'loading-library'
           ? 'Loading library'
         : providerStatus === 'loading-script'
@@ -311,8 +357,8 @@ export default function AudioCall() {
                 ? 'Joining call'
               : providerStatus === 'error'
                 ? 'Connection failed'
-              : callSession?.status === 'ended'
-                ? 'Ended'
+              : terminalCallLabel
+                ? terminalCallLabel
                 : isProviderReady
                   ? 'Call ready'
                   : callSession
@@ -351,20 +397,20 @@ export default function AudioCall() {
       {isLibJitsiEngine && isDebugAudio && (
         <div className="absolute right-4 top-20 z-[370] max-w-xs rounded-xl border border-gold/25 bg-black/80 p-3 font-mono text-[11px] leading-5 text-cream/80 shadow-2xl">
           <div>engine: {libJitsiAudio.diagnostics.engine}</div>
+          <div>secure context: {libJitsiAudio.diagnostics.secureContext ? 'yes' : 'no'}</div>
+          <div>microphone capability: {libJitsiAudio.diagnostics.microphoneCapability ? 'yes' : 'no'}</div>
           <div>selected transport: {libJitsiAudio.diagnostics.selectedTransport}</div>
           <div>script loaded: {libJitsiAudio.diagnostics.scriptLoaded ? 'yes' : 'no'}</div>
           <div>connection status: {libJitsiAudio.diagnostics.connectionStatus}</div>
           <div>connection established: {libJitsiAudio.diagnostics.connectionEstablished ? 'yes' : 'no'}</div>
           <div>conference status: {libJitsiAudio.diagnostics.conferenceStatus}</div>
           <div>conference joining: {libJitsiAudio.diagnostics.conferenceJoinInProgress ? 'yes' : 'no'}</div>
-          <div>room: {libJitsiAudio.diagnostics.roomName || 'none'}</div>
-          <div>focusUserJid configured: {libJitsiAudio.diagnostics.focusUserJidConfigured ? 'yes' : 'no'}</div>
           <div>local audio track: {libJitsiAudio.diagnostics.localAudioTrackCreated ? 'yes' : 'no'}</div>
           <div>remote audio tracks: {libJitsiAudio.diagnostics.remoteAudioTrackCount}</div>
           <div>last event: {libJitsiAudio.diagnostics.lastEvent || 'none'}</div>
           <div>failure event: {libJitsiAudio.diagnostics.lastFailureEvent || 'none'}</div>
           <div>connection failed code: {libJitsiAudio.diagnostics.connectionFailedCode || 'none'}</div>
-          <div>last error: {libJitsiAudio.diagnostics.lastSafeError || callError || 'none'}</div>
+          <div>last error category: {libJitsiAudio.diagnostics.lastSafeErrorCategory || (callError ? 'call_error' : 'none')}</div>
           <div>safe args: {JSON.stringify(libJitsiAudio.diagnostics.lastFailureArgs || [])}</div>
         </div>
       )}

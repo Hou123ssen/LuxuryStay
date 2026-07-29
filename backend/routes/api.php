@@ -45,7 +45,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/conversations',             [ConversationController::class, 'store']);
     Route::post('/conversations/{conversation}/read', [ConversationController::class, 'markAsRead']);
     Route::get('/conversations/{conversation}/call-sessions/active', [CallSessionController::class, 'active']);
-    Route::post('/conversations/{conversation}/call-sessions', [CallSessionController::class, 'store']);
+    Route::post('/conversations/{conversation}/call-sessions', [CallSessionController::class, 'store'])->middleware('throttle:5,1');
+    Route::get('/call-sessions/incoming', [CallSessionController::class, 'incoming']);
+    Route::get('/call-sessions/current', [CallSessionController::class, 'current']);
+    Route::post('/call-sessions/{callSession}/accept', [CallSessionController::class, 'accept']);
+    Route::post('/call-sessions/{callSession}/decline', [CallSessionController::class, 'decline']);
     Route::post('/call-sessions/{callSession}/end', [CallSessionController::class, 'end']);
 
     Route::get('/messages/{conversationId}',  [ConversationController::class, 'messages']);

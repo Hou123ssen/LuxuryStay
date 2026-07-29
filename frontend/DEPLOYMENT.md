@@ -66,6 +66,22 @@ Mobile audio calls require HTTPS because browsers only allow microphone and WebR
 
 For production, use `VITE_API_URL=https://your-api-domain.com/api`. The frontend and backend must both be served over HTTPS.
 
+Microphone permission is required before a user can join an audio call. Call alerts may also need the user to tap **Enable call alerts** once so the browser allows ringtone playback.
+
+LuxurrStay currently uses external free kMeet/Jitsi infrastructure for MVP audio calls. This keeps launch cost low, but it means call availability, TURN behavior, and regional connectivity are not covered by a LuxurrStay-controlled SLA.
+
+Production smoke test matrix:
+
+- Chrome desktop
+- Firefox desktop
+- Android Chrome
+- iPhone Safari
+- Wi-Fi to Wi-Fi
+- Wi-Fi to mobile data
+- Restricted or corporate network when possible
+
+Future migration path: move to a LuxurrStay-controlled Jitsi deployment with dedicated TURN/STUN, monitoring, and explicit uptime ownership when call reliability becomes a core business requirement.
+
 ## 5. Best Practices
 
 1. **Never commit `.env`** — it is already in `.gitignore`.
