@@ -11,6 +11,7 @@ import {
 } from 'react-icons/fi';
 
 const STATUS_STYLES = {
+  accepted:  'bg-green-500/10 text-green-400 border-green-500/20',
   confirmed: 'bg-green-500/10 text-green-400 border-green-500/20',
   pending:   'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
   rejected:  'bg-red-500/10 text-red-400 border-red-500/20',
@@ -47,9 +48,11 @@ export default function Bookings() {
     setActionLoad(id);
     try {
       await bookingService.accept(id);
-      setMyProps(prev => prev.map(b => b.id === id ? { ...b, status: 'confirmed' } : b));
-      toast.success('Booking confirmed! ✅');
-    } catch { toast.error('Failed to confirm booking'); }
+      setMyProps(prev => prev.map(b => b.id === id ? { ...b, status: 'accepted' } : b));
+      toast.success('Booking accepted!');
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.response?.data?.error || 'Failed to accept booking');
+    }
     setActionLoad(null);
   };
 
@@ -59,7 +62,9 @@ export default function Bookings() {
       await bookingService.reject(id);
       setMyProps(prev => prev.map(b => b.id === id ? { ...b, status: 'rejected' } : b));
       toast.success('Booking rejected');
-    } catch { toast.error('Failed to reject booking'); }
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.response?.data?.error || 'Failed to reject booking');
+    }
     setActionLoad(null);
   };
 

@@ -79,14 +79,18 @@ class BookingController extends Controller
                 'message' => json_encode([
                     'type'        => 'booking_request',
                     'booking_id'  => $booking->id,
+                    'property_id' => $property->id,
                     'booker_id'   => Auth::id(),          // ← مهم للـ Chat
                     'booker_name' => $booker->name,
                     'property'    => $property->title,
+                    'property_title' => $property->title,
+                    'guest_name' => $booker->name,
+                    'check_in' => $request->start_date,
+                    'check_out' => $request->end_date,
                     'start_date'  => $request->start_date,
                     'end_date'    => $request->end_date,
                     'text'        => "{$booker->name} requested to book \"{$property->title}\" from {$request->start_date} to {$request->end_date}.",
                 ]),
-                'read' => false,
             ]);
 
             // notification للحاجز — طلبه قيد الانتظار
@@ -95,9 +99,9 @@ class BookingController extends Controller
                 'message' => json_encode([
                     'type'       => 'booking_pending',
                     'booking_id' => $booking->id,
+                    'property_id' => $property->id,
                     'text'       => "Your booking request for \"{$property->title}\" from {$request->start_date} to {$request->end_date} is awaiting owner approval.",
                 ]),
-                'read' => false,
             ]);
         }
 
@@ -131,7 +135,7 @@ class BookingController extends Controller
 
         if ($overlap) {
             return response()->json([
-                'message' => 'This property is already booked for the selected dates.',
+                'message' => 'These dates are no longer available.',
             ], 409);
         }
 
@@ -143,9 +147,9 @@ class BookingController extends Controller
             'message' => json_encode([
                 'type'       => 'booking_accepted',
                 'booking_id' => $booking->id,
+                'property_id' => $property->id,
                 'text'       => "✅ Your booking for \"{$property->title}\" from {$booking->start_date} to {$booking->end_date} has been accepted!",
             ]),
-            'read' => false,
         ]);
 
         return response()->json([
@@ -177,9 +181,9 @@ class BookingController extends Controller
             'message' => json_encode([
                 'type'       => 'booking_rejected',
                 'booking_id' => $booking->id,
+                'property_id' => $property->id,
                 'text'       => "❌ Your booking request for \"{$property->title}\" from {$booking->start_date} to {$booking->end_date} was declined.",
             ]),
-            'read' => false,
         ]);
 
         return response()->json([

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Notification;
 use App\Models\Property;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -175,6 +176,67 @@ class BookingStoreTest extends TestCase
         ]);
         $this->assertDatabaseCount('bookings', 0);
         $this->assertDatabaseCount('notifications', 0);
+    }
+
+    public function test_booking_request_notification_is_created_for_owner_with_safe_metadata(): void
+    {
+        $host = User::factory()->create();
+        $guest = User::factory()->create(['name' => 'Draga']);
+        $property = $this->createPropertyFor($host, [
+            'title' => 'Mansoria',
+            'price_per_night' => 1000,
+        ]);
+
+        $response = $this
+            ->actingAs($guest, 'sanctum')
+            ->postJson('/api/bookings', [
+                'property_id' => $property->id,
+                'start_date' => '2026-08-01',
+                'end_date' => '2026-08-03',
+            ])
+            ->assertCreated();
+
+        $notification = Notification::where('user_id', $host->id)->firstOrFail();
+        $payload = json_decode($notification->message, true);
+
+        $this->assertNull($notification->read);
+        $this->assertSame('booking_request', $payload['type']);
+        $this->assertSame($response->json('data.id'), $payload['booking_id']);
+        $this->assertSame($property->id, $payload['property_id']);
+        $this->assertSame('Mansoria', $payload['property_title']);
+        $this->assertSame('Draga', $payload['guest_name']);
+        $this->assertSame('2026-08-01', $payload['check_in']);
+        $this->assertSame('2026-08-03', $payload['check_out']);
+        $this->assertArrayNotHasKey('guest_email', $payload);
+    }
+
+    public function test_notification_response_includes_booking_request_metadata(): void
+    {
+        $host = User::factory()->create();
+        $guest = User::factory()->create(['name' => 'Draga']);
+        $property = $this->createPropertyFor($host, ['title' => 'Mansoria']);
+
+        $bookingResponse = $this
+            ->actingAs($guest, 'sanctum')
+            ->postJson('/api/bookings', [
+                'property_id' => $property->id,
+                'start_date' => '2026-08-01',
+                'end_date' => '2026-08-03',
+            ])
+            ->assertCreated();
+
+        $this
+            ->actingAs($host, 'sanctum')
+            ->getJson('/api/notifications')
+            ->assertOk()
+            ->assertJsonPath('data.0.type', 'booking_request')
+            ->assertJsonPath('data.0.booking_id', $bookingResponse->json('data.id'))
+            ->assertJsonPath('data.0.property_id', $property->id)
+            ->assertJsonPath('data.0.property_title', 'Mansoria')
+            ->assertJsonPath('data.0.guest_name', 'Draga')
+            ->assertJsonPath('data.0.check_in', '2026-08-01')
+            ->assertJsonPath('data.0.check_out', '2026-08-03')
+            ->assertJsonPath('data.0.read', false);
     }
 
     private function createPropertyFor(User $user, array $attributes = []): Property

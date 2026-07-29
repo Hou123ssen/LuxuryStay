@@ -103,7 +103,7 @@ export default function BookingCalendar({ property }) {
         start_date:  formatDateAsLocalString(startDate),
         end_date:    formatDateAsLocalString(endDate),
       });
-      toast.success('Booking confirmed! 🎉');
+      toast.success('Booking request sent.');
       navigate('/bookings');
     } catch (err) {
       toast.error(err.response?.data?.message || 'Booking failed. Please try again.');

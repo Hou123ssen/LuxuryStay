@@ -63,7 +63,7 @@ class BookingAcceptTest extends TestCase
 
         $response
             ->assertStatus(409)
-            ->assertJsonPath('message', 'This property is already booked for the selected dates.');
+            ->assertJsonPath('message', 'These dates are no longer available.');
 
         $this->assertDatabaseHas('bookings', [
             'id' => $blockedBooking->id,
@@ -131,6 +131,149 @@ class BookingAcceptTest extends TestCase
             'id' => $booking->id,
             'status' => 'accepted',
         ]);
+    }
+
+    public function test_owner_can_reject_pending_booking_and_status_becomes_rejected(): void
+    {
+        $host = User::factory()->create();
+        $guest = User::factory()->create();
+        $property = $this->createPropertyFor($host);
+        $booking = $this->createBookingFor($guest, $property, [
+            'status' => 'pending',
+        ]);
+
+        $this
+            ->actingAs($host, 'sanctum')
+            ->postJson('/api/bookings/'.$booking->id.'/reject')
+            ->assertOk()
+            ->assertJsonPath('message', 'Booking rejected.')
+            ->assertJsonPath('data.status', 'rejected');
+
+        $this->assertDatabaseHas('bookings', [
+            'id' => $booking->id,
+            'status' => 'rejected',
+        ]);
+    }
+
+    public function test_owner_accepts_pending_booking_and_availability_updates(): void
+    {
+        $host = User::factory()->create();
+        $guest = User::factory()->create();
+        $property = $this->createPropertyFor($host);
+        $booking = $this->createBookingFor($guest, $property, [
+            'start_date' => '2026-08-01',
+            'end_date' => '2026-08-03',
+            'status' => 'pending',
+        ]);
+
+        $this
+            ->actingAs($host, 'sanctum')
+            ->getJson('/api/properties/'.$property->id.'/availability')
+            ->assertOk()
+            ->assertJsonPath('unavailable_dates', []);
+
+        $this
+            ->actingAs($host, 'sanctum')
+            ->postJson('/api/bookings/'.$booking->id.'/accept')
+            ->assertOk();
+
+        $this
+            ->actingAs($host, 'sanctum')
+            ->getJson('/api/properties/'.$property->id.'/availability')
+            ->assertOk()
+            ->assertJsonPath('unavailable_dates', [
+                '2026-08-01',
+                '2026-08-02',
+            ]);
+    }
+
+    public function test_owner_rejects_pending_booking_and_availability_stays_open(): void
+    {
+        $host = User::factory()->create();
+        $guest = User::factory()->create();
+        $property = $this->createPropertyFor($host);
+        $booking = $this->createBookingFor($guest, $property, [
+            'start_date' => '2026-08-01',
+            'end_date' => '2026-08-03',
+            'status' => 'pending',
+        ]);
+
+        $this
+            ->actingAs($host, 'sanctum')
+            ->postJson('/api/bookings/'.$booking->id.'/reject')
+            ->assertOk();
+
+        $this
+            ->actingAs($host, 'sanctum')
+            ->getJson('/api/properties/'.$property->id.'/availability')
+            ->assertOk()
+            ->assertJsonPath('unavailable_dates', []);
+    }
+
+    public function test_back_to_back_accepted_bookings_are_allowed_on_acceptance(): void
+    {
+        $host = User::factory()->create();
+        $guestA = User::factory()->create();
+        $guestB = User::factory()->create();
+        $property = $this->createPropertyFor($host);
+
+        $this->createBookingFor($guestA, $property, [
+            'start_date' => '2026-08-01',
+            'end_date' => '2026-08-03',
+            'status' => 'accepted',
+        ]);
+        $booking = $this->createBookingFor($guestB, $property, [
+            'start_date' => '2026-08-03',
+            'end_date' => '2026-08-05',
+            'status' => 'pending',
+        ]);
+
+        $this
+            ->actingAs($host, 'sanctum')
+            ->postJson('/api/bookings/'.$booking->id.'/accept')
+            ->assertOk()
+            ->assertJsonPath('data.status', 'accepted');
+    }
+
+    public function test_guest_cannot_accept_or_reject_own_booking(): void
+    {
+        $host = User::factory()->create();
+        $guest = User::factory()->create();
+        $property = $this->createPropertyFor($host);
+        $booking = $this->createBookingFor($guest, $property);
+
+        $this
+            ->actingAs($guest, 'sanctum')
+            ->postJson('/api/bookings/'.$booking->id.'/accept')
+            ->assertForbidden();
+
+        $this
+            ->actingAs($guest, 'sanctum')
+            ->postJson('/api/bookings/'.$booking->id.'/reject')
+            ->assertForbidden();
+
+        $this->assertSame('pending', $booking->refresh()->status);
+    }
+
+    public function test_non_owner_cannot_accept_or_reject_booking(): void
+    {
+        $host = User::factory()->create();
+        $guest = User::factory()->create();
+        $outsider = User::factory()->create();
+        $property = $this->createPropertyFor($host);
+        $booking = $this->createBookingFor($guest, $property);
+
+        $this
+            ->actingAs($outsider, 'sanctum')
+            ->postJson('/api/bookings/'.$booking->id.'/accept')
+            ->assertForbidden();
+
+        $this
+            ->actingAs($outsider, 'sanctum')
+            ->postJson('/api/bookings/'.$booking->id.'/reject')
+            ->assertForbidden();
+
+        $this->assertSame('pending', $booking->refresh()->status);
     }
 
     private function createPropertyFor(User $user, array $attributes = []): Property

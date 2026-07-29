@@ -3,6 +3,7 @@ import { notificationService } from "../api/notificationApi";
 import { chatService } from "../../chat/api/chatApi";
 import { bookingService } from "../../bookings/api/bookingApi";
 import { useNavigate } from 'react-router-dom';
+import { notifyNavbarCountsChanged } from "../../../shared/utils/navbarCountsEvents";
 
 import { format } from "date-fns";
 import {
@@ -39,6 +40,7 @@ export default function Notifications() {
     try {
       await notificationService.markAllAsRead();
       setNotifs((prev) => prev.map((n) => ({ ...n, read: true })));
+      notifyNavbarCountsChanged();
     } catch {}
   };
 
@@ -48,6 +50,7 @@ export default function Notifications() {
       setNotifs((prev) =>
         prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
       );
+      notifyNavbarCountsChanged();
     } catch {}
   };
 
@@ -72,7 +75,7 @@ export default function Notifications() {
       );
       toast.success("Booking accepted! ✅");
     } catch (err) {
-      toast.error(err.response?.data?.error || "Failed to accept booking");
+      toast.error(err.response?.data?.message || err.response?.data?.error || "Failed to accept booking");
     }
     setActionLoad(null);
   };
@@ -97,7 +100,7 @@ export default function Notifications() {
       );
       toast.success("Booking rejected.");
     } catch (err) {
-      toast.error(err.response?.data?.error || "Failed to reject booking");
+      toast.error(err.response?.data?.message || err.response?.data?.error || "Failed to reject booking");
     }
     setActionLoad(null);
   };
@@ -188,6 +191,25 @@ export default function Notifications() {
                   >
                     {n.message}
                   </p>
+                  {n.type === "booking_request" && (
+                    <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-cream/40">
+                      {n.property_title && (
+                        <span className="rounded-full border border-gold/15 bg-gold/5 px-2.5 py-1 text-gold/70">
+                          {n.property_title}
+                        </span>
+                      )}
+                      {n.guest_name && (
+                        <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
+                          {n.guest_name}
+                        </span>
+                      )}
+                      {n.check_in && n.check_out && (
+                        <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
+                          {n.check_in} - {n.check_out}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   <span className="text-xs text-cream/25 mt-1 block">
                     {n.created_at
                       ? format(new Date(n.created_at), "MMM d, yyyy · HH:mm")
@@ -200,17 +222,12 @@ export default function Notifications() {
                       {/* ── زر Chat مع الزبون ── */}
                       <button
                         onClick={async () => {
-                            console.log(
-                              "notification data:",
-                              JSON.stringify(n),
-                            );
                           try {
                             // ابدأ أو افتح المحادثة مع الزبون
                             const res = await chatService.createConversation({
                               other_user_id: n.booker_id, // ← نضيفه في الـ notification
                             });
                             const convId = res.data?.id || res.data?.data?.id;
-                            console.log('conv response:', res.data)
                             navigate(`/chat?conversation_id=${convId}`);
                           } catch {
                             toast.error("Could not open chat");
@@ -222,6 +239,13 @@ export default function Notifications() {
                       </button>
 
                       {/* ── Decline ── */}
+                      <button
+                        onClick={() => navigate("/bookings")}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-white/10 text-cream/55 hover:border-gold/25 hover:text-gold transition-colors text-xs"
+                      >
+                        View Booking
+                      </button>
+
                       {!n.read && (
                         <button
                           onClick={() => handleReject(n)}

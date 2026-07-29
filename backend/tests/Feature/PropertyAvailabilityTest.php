@@ -38,7 +38,7 @@ class PropertyAvailabilityTest extends TestCase
             ]);
     }
 
-    public function test_availability_ignores_pending_rejected_and_other_property_bookings(): void
+    public function test_availability_ignores_non_accepted_and_other_property_bookings(): void
     {
         $user = User::factory()->create();
         $property = $this->createPropertyFor($user);
@@ -53,6 +53,21 @@ class PropertyAvailabilityTest extends TestCase
             'start_date' => '2026-08-04',
             'end_date' => '2026-08-06',
             'status' => 'rejected',
+        ]);
+        $this->createBookingFor($user, $property, [
+            'start_date' => '2026-08-06',
+            'end_date' => '2026-08-08',
+            'status' => 'cancelled',
+        ]);
+        $this->createBookingFor($user, $property, [
+            'start_date' => '2026-08-08',
+            'end_date' => '2026-08-10',
+            'status' => 'declined',
+        ]);
+        $this->createBookingFor($user, $property, [
+            'start_date' => '2026-08-10',
+            'end_date' => '2026-08-12',
+            'status' => 'missed',
         ]);
         $this->createBookingFor($user, $otherProperty, [
             'start_date' => '2026-08-07',

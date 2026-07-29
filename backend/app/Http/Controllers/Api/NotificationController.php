@@ -18,12 +18,17 @@ class NotificationController extends Controller
                 $decoded = json_decode($n->message, true);
                 return [
                     'id'         => $n->id,
-                    'read'       => $n->read,
+                    'read'       => $n->read !== null,
                     'created_at' => $n->created_at,
                     // إذا JSON → استخدم text، وإلا استخدم message مباشرة
                     'message'    => $decoded['text']    ?? $n->message,
                     'type'       => $decoded['type']    ?? 'general',
                     'booking_id'  => $decoded['booking_id']  ?? null,
+                    'property_id' => $decoded['property_id'] ?? null,
+                    'property_title' => $decoded['property_title'] ?? $decoded['property'] ?? null,
+                    'guest_name' => $decoded['guest_name'] ?? $decoded['booker_name'] ?? null,
+                    'check_in' => $decoded['check_in'] ?? $decoded['start_date'] ?? null,
+                    'check_out' => $decoded['check_out'] ?? $decoded['end_date'] ?? null,
                     'booker_id'   => $decoded['booker_id']   ?? null,
                 ];
             });
@@ -35,7 +40,7 @@ class NotificationController extends Controller
     {
         Notification::where('user_id', Auth::id())
             ->findOrFail($id)
-            ->update(['read' => true]);
+            ->update(['read' => now()]);
 
         return response()->json(['message' => 'Marked as read']);
     }
@@ -43,8 +48,8 @@ class NotificationController extends Controller
     public function markAllAsRead()
     {
         Notification::where('user_id', Auth::id())
-            ->where('read', false)
-            ->update(['read' => true]);
+            ->whereNull('read')
+            ->update(['read' => now()]);
 
         return response()->json(['message' => 'All marked as read']);
     }
