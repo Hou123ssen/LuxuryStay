@@ -98,6 +98,26 @@ class ReviewSystemTest extends TestCase
         $this->assertNull($review->moderated_by);
     }
 
+    public function test_unauthenticated_user_cannot_create_review(): void
+    {
+        $owner = User::factory()->create();
+        $guest = User::factory()->create();
+        $property = $this->propertyFor($owner);
+        $booking = $this->bookingFor($guest, $property, [
+            'status' => 'accepted',
+            'end_date' => '2026-07-20',
+        ]);
+
+        $this
+            ->postJson('/api/reviews', [
+                'property_id' => $property->id,
+                'booking_id' => $booking->id,
+                'rating' => 5,
+                'comment' => 'Not signed in.',
+            ])
+            ->assertUnauthorized();
+    }
+
     public function test_pending_rejected_and_cancelled_bookings_cannot_review(): void
     {
         $owner = User::factory()->create();
@@ -267,7 +287,82 @@ class ReviewSystemTest extends TestCase
                 'rating' => 4,
             ])
             ->assertConflict()
-            ->assertJsonPath('message', 'Review already submitted for this booking.');
+            ->assertJsonPath('message', 'This stay has already been reviewed.');
+
+        $this->assertSame(1, Review::where('booking_id', $booking->id)->count());
+    }
+
+    public function test_near_simultaneous_duplicate_review_attempts_create_only_one_review(): void
+    {
+        $owner = User::factory()->create();
+        $guest = User::factory()->create();
+        $property = $this->propertyFor($owner);
+        $booking = $this->bookingFor($guest, $property, [
+            'status' => 'accepted',
+            'end_date' => '2026-07-20',
+        ]);
+
+        $payload = [
+            'property_id' => $property->id,
+            'booking_id' => $booking->id,
+            'rating' => 5,
+            'comment' => 'One and only review.',
+        ];
+
+        $this
+            ->actingAs($guest, 'sanctum')
+            ->postJson('/api/reviews', $payload)
+            ->assertCreated();
+
+        $this
+            ->actingAs($guest, 'sanctum')
+            ->postJson('/api/reviews', $payload)
+            ->assertConflict()
+            ->assertJsonPath('message', 'This stay has already been reviewed.');
+
+        $this->assertSame(1, Review::where('booking_id', $booking->id)->count());
+    }
+
+    public function test_review_creation_is_throttled_after_five_attempts_per_hour(): void
+    {
+        $owner = User::factory()->create();
+        $guest = User::factory()->create();
+
+        for ($i = 0; $i < 5; $i++) {
+            $property = $this->propertyFor($owner, ['title' => 'Throttle '.$i]);
+            $booking = $this->bookingFor($guest, $property, [
+                'status' => 'accepted',
+                'end_date' => '2026-07-20',
+            ]);
+
+            $this
+                ->actingAs($guest, 'sanctum')
+                ->postJson('/api/reviews', [
+                    'property_id' => $property->id,
+                    'booking_id' => $booking->id,
+                    'rating' => 5,
+                    'comment' => 'Allowed attempt '.$i,
+                ])
+                ->assertCreated();
+        }
+
+        $blockedProperty = $this->propertyFor($owner, ['title' => 'Throttle blocked']);
+        $blockedBooking = $this->bookingFor($guest, $blockedProperty, [
+            'status' => 'accepted',
+            'end_date' => '2026-07-20',
+        ]);
+
+        $this
+            ->actingAs($guest, 'sanctum')
+            ->postJson('/api/reviews', [
+                'property_id' => $blockedProperty->id,
+                'booking_id' => $blockedBooking->id,
+                'rating' => 5,
+                'comment' => 'Too many attempts.',
+            ])
+            ->assertTooManyRequests();
+
+        $this->assertSame(0, Review::where('booking_id', $blockedBooking->id)->count());
     }
 
     public function test_property_index_detail_and_favorites_include_rating_aggregates(): void

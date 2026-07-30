@@ -73,7 +73,7 @@ Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanc
 
 
 Route::post('/reviews', [ReviewController::class, 'store'])
-    ->middleware('auth:sanctum');
+    ->middleware(['auth:sanctum', 'throttle:5,60']);
 
 Route::post('/favorites/toggle', [FavoriteController::class, 'toggle'])
     ->middleware('auth:sanctum');

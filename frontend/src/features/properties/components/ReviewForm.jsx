@@ -22,6 +22,8 @@ export default function ReviewForm({ propertyId, eligibleBookings = [], onSucces
   if (eligibleBookings.length === 0) return null;
 
   const submit = async () => {
+    if (loading) return;
+
     if (!bookingId) {
       toast.error("Please select the completed stay to review");
       return;
@@ -48,7 +50,11 @@ export default function ReviewForm({ propertyId, eligibleBookings = [], onSucces
       setBookingId("");
       onSuccess?.();
     } catch (err) {
-      toast.error(err.response?.data?.message || "Could not submit review");
+      const message = err.response?.status === 409
+        ? "You already reviewed this stay."
+        : err.response?.data?.message || "Could not submit review";
+
+      toast.error(message);
     } finally {
       setLoad(false);
     }
@@ -61,6 +67,7 @@ export default function ReviewForm({ propertyId, eligibleBookings = [], onSucces
         <select
           value={bookingId}
           onChange={(e) => setBookingId(e.target.value)}
+          disabled={loading}
           className="luxury-input w-full px-4 py-3 rounded-xl text-sm mb-4"
         >
           <option value="">Select completed stay</option>
@@ -77,8 +84,9 @@ export default function ReviewForm({ propertyId, eligibleBookings = [], onSucces
             key={n}
             onMouseEnter={() => setHover(n)}
             onMouseLeave={() => setHover(0)}
-            onClick={() => setRating(n)}
-            className={`text-2xl transition-all ${(hover || rating) >= n ? "text-gold scale-110" : "text-cream/20"}`}
+            onClick={() => !loading && setRating(n)}
+            disabled={loading}
+            className={`text-2xl transition-all disabled:cursor-not-allowed disabled:opacity-60 ${(hover || rating) >= n ? "text-gold scale-110" : "text-cream/20"}`}
           >
             <FiStar fill={(hover || rating) >= n ? "currentColor" : "none"} />
           </button>
@@ -89,12 +97,13 @@ export default function ReviewForm({ propertyId, eligibleBookings = [], onSucces
         onChange={(e) => setComment(e.target.value)}
         placeholder="Share your experience…"
         rows={3}
+        disabled={loading}
         className="luxury-input w-full px-4 py-3 rounded-xl text-sm resize-none mb-4"
       />
       <button
         onClick={submit}
         disabled={loading || !bookingId}
-        className="btn-gold px-6 py-2.5 rounded-xl text-sm font-medium"
+        className="btn-gold px-6 py-2.5 rounded-xl text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
       >
         {loading ? "Submitting…" : "Submit Review"}
       </button>
