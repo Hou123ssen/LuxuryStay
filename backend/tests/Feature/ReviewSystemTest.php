@@ -55,7 +55,47 @@ class ReviewSystemTest extends TestCase
             'property_id' => $property->id,
             'booking_id' => $booking->id,
             'rating' => 5,
+            'status' => Review::STATUS_PUBLISHED,
         ]);
+
+        $review = Review::where('booking_id', $booking->id)->first();
+        $this->assertNotNull($review->published_at);
+    }
+
+    public function test_frontend_supplied_moderation_fields_are_ignored_on_review_creation(): void
+    {
+        $owner = User::factory()->create();
+        $guest = User::factory()->create();
+        $moderator = User::factory()->create();
+        $property = $this->propertyFor($owner);
+        $booking = $this->bookingFor($guest, $property, [
+            'status' => 'accepted',
+            'end_date' => '2026-07-20',
+        ]);
+
+        $this
+            ->actingAs($guest, 'sanctum')
+            ->postJson('/api/reviews', [
+                'property_id' => $property->id,
+                'booking_id' => $booking->id,
+                'rating' => 5,
+                'comment' => 'Trying to smuggle moderation fields.',
+                'status' => Review::STATUS_REJECTED,
+                'published_at' => null,
+                'moderated_at' => now()->toDateTimeString(),
+                'moderated_by' => $moderator->id,
+            ])
+            ->assertCreated()
+            ->assertJsonMissingPath('data.status')
+            ->assertJsonMissingPath('data.published_at')
+            ->assertJsonMissingPath('data.moderated_at')
+            ->assertJsonMissingPath('data.moderated_by');
+
+        $review = Review::where('booking_id', $booking->id)->first();
+        $this->assertSame(Review::STATUS_PUBLISHED, $review->status);
+        $this->assertNotNull($review->published_at);
+        $this->assertNull($review->moderated_at);
+        $this->assertNull($review->moderated_by);
     }
 
     public function test_pending_rejected_and_cancelled_bookings_cannot_review(): void
@@ -279,6 +319,56 @@ class ReviewSystemTest extends TestCase
             ->assertJsonPath('data.0.property.reviews_count', 2);
     }
 
+    public function test_pending_and_rejected_reviews_do_not_affect_public_rating_payloads_or_review_list(): void
+    {
+        $owner = User::factory()->create();
+        $guestA = User::factory()->create();
+        $guestB = User::factory()->create();
+        $guestC = User::factory()->create();
+        $property = $this->propertyFor($owner);
+
+        $published = $this->reviewFor($guestA, $property, 5);
+        $pending = $this->moderatedReviewFor($guestB, $property, 1, Review::STATUS_PENDING_REVIEW);
+        $rejected = $this->moderatedReviewFor($guestC, $property, 1, Review::STATUS_REJECTED);
+
+        Favorite::create([
+            'user_id' => $guestA->id,
+            'property_id' => $property->id,
+        ]);
+
+        $this
+            ->actingAs($guestA, 'sanctum')
+            ->getJson('/api/properties')
+            ->assertOk()
+            ->assertJsonPath('data.0.average_rating', 5)
+            ->assertJsonPath('data.0.reviews_count', 1)
+            ->assertJsonPath('data.0.rating_state', 'forming')
+            ->assertJsonPath('data.0.ranking_score', 4.2);
+
+        $detail = $this
+            ->actingAs($guestA, 'sanctum')
+            ->getJson('/api/properties/'.$property->id)
+            ->assertOk()
+            ->assertJsonPath('average_rating', 5)
+            ->assertJsonPath('reviews_count', 1)
+            ->assertJsonPath('rating_state', 'forming')
+            ->assertJsonPath('ranking_score', 4.2);
+
+        $reviewIds = collect($detail->json('reviews'))->pluck('id')->all();
+        $this->assertSame([$published->id], $reviewIds);
+        $this->assertNotContains($pending->id, $reviewIds);
+        $this->assertNotContains($rejected->id, $reviewIds);
+
+        $this
+            ->actingAs($guestA, 'sanctum')
+            ->getJson('/api/favorites')
+            ->assertOk()
+            ->assertJsonPath('data.0.property.average_rating', 5)
+            ->assertJsonPath('data.0.property.reviews_count', 1)
+            ->assertJsonPath('data.0.property.rating_state', 'forming')
+            ->assertJsonPath('data.0.property.ranking_score', 4.2);
+    }
+
     public function test_property_with_no_reviews_returns_empty_rating_contract(): void
     {
         $owner = User::factory()->create();
@@ -377,6 +467,27 @@ class ReviewSystemTest extends TestCase
             ->assertJsonPath('ranking_score', 4.1)
             ->assertJsonPath('rating_label', null)
             ->assertJsonPath('reviews_count', 5);
+    }
+
+    public function test_four_published_reviews_and_one_pending_review_stay_forming(): void
+    {
+        $owner = User::factory()->create();
+        $property = $this->propertyFor($owner);
+
+        for ($i = 0; $i < 4; $i++) {
+            $this->reviewFor(User::factory()->create(), $property, 5);
+        }
+
+        $this->moderatedReviewFor(User::factory()->create(), $property, 5, Review::STATUS_PENDING_REVIEW);
+
+        $this
+            ->actingAs(User::factory()->create(), 'sanctum')
+            ->getJson('/api/properties/'.$property->id)
+            ->assertOk()
+            ->assertJsonPath('average_rating', 5)
+            ->assertJsonPath('reviews_count', 4)
+            ->assertJsonPath('rating_state', 'forming')
+            ->assertJsonPath('rating_label', 'Rating forming · 4 verified stays');
     }
 
     public function test_many_strong_reviews_move_ranking_score_closer_to_raw_average(): void
@@ -586,5 +697,23 @@ class ReviewSystemTest extends TestCase
             'rating' => $rating,
             'comment' => 'Lovely stay.',
         ]);
+    }
+
+    private function moderatedReviewFor(User $user, Property $property, int $rating, string $status): Review
+    {
+        $booking = $this->bookingFor($user, $property);
+        $review = new Review([
+            'user_id' => $user->id,
+            'property_id' => $property->id,
+            'booking_id' => $booking->id,
+            'rating' => $rating,
+            'comment' => 'Hidden from public aggregate.',
+        ]);
+
+        $review->status = $status;
+        $review->published_at = $status === Review::STATUS_PUBLISHED ? now() : null;
+        $review->save();
+
+        return $review;
     }
 }

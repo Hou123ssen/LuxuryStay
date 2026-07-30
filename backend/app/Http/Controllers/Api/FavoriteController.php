@@ -34,8 +34,12 @@ class FavoriteController extends Controller
                 'property' => function ($query) {
                     $query
                         ->with('images')
-                        ->withAvg('reviews', 'rating')
-                        ->withCount('reviews');
+                        ->withAvg(['reviews as reviews_avg_rating' => function ($query) {
+                            $query->published();
+                        }], 'rating')
+                        ->withCount(['reviews as reviews_count' => function ($query) {
+                            $query->published();
+                        }]);
                 },
             ])
             ->where('user_id', Auth::id())

@@ -15,8 +15,12 @@ class PropertyController extends Controller
     public function index(Request $request)
     {
         $query = Property::with('images')
-            ->withAvg('reviews', 'rating')
-            ->withCount('reviews');
+            ->withAvg(['reviews as reviews_avg_rating' => function ($query) {
+                $query->published();
+            }], 'rating')
+            ->withCount(['reviews as reviews_count' => function ($query) {
+                $query->published();
+            }]);
 
         if ($request->city) {
             $query->where('city', 'like', '%' . $request->city . '%');
@@ -63,9 +67,18 @@ class PropertyController extends Controller
 
     public function show($id)
     {
-        $property = Property::with(['images', 'reviews.user'])
-            ->withAvg('reviews', 'rating')
-            ->withCount('reviews')
+        $property = Property::with([
+                'images',
+                'reviews' => function ($query) {
+                    $query->published()->with('user')->latest();
+                },
+            ])
+            ->withAvg(['reviews as reviews_avg_rating' => function ($query) {
+                $query->published();
+            }], 'rating')
+            ->withCount(['reviews as reviews_count' => function ($query) {
+                $query->published();
+            }])
             ->findOrFail($id);
 
         PropertyRating::apply($property);

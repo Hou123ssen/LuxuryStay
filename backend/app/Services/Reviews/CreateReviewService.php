@@ -43,13 +43,19 @@ class CreateReviewService
             throw $this->error('Review already submitted for this booking.', 409);
         }
 
-        return Review::create([
+        $review = new Review([
             'user_id' => $user->id,
             'property_id' => $property->id,
             'booking_id' => $booking->id,
             'rating' => (int) $data['rating'],
             'comment' => $data['comment'] ?? null,
-        ])->load('user');
+        ]);
+
+        $review->status = Review::STATUS_PUBLISHED;
+        $review->published_at = now();
+        $review->save();
+
+        return $review->load('user');
     }
 
     private function error(string $message, int $status): HttpResponseException
