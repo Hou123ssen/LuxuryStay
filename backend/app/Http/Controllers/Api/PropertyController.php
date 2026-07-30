@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Booking;
 use App\Models\Property;
+use App\Support\PropertyRating;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
@@ -12,7 +14,9 @@ class PropertyController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Property::with('images')->withAvg('reviews', 'rating');
+        $query = Property::with('images')
+            ->withAvg('reviews', 'rating')
+            ->withCount('reviews');
 
         if ($request->city) {
             $query->where('city', 'like', '%' . $request->city . '%');
@@ -35,7 +39,7 @@ class PropertyController extends Controller
                 $query->orderBy('price_per_night', 'desc');
                 break;
             case 'rating':
-                $query->orderBy('reviews_avg_rating', 'desc');
+                $query->orderByRaw(PropertyRating::weightedScoreSql('reviews_avg_rating', 'reviews_count').' desc');
                 break;
             default:
                 $query->orderBy('created_at', 'desc');
@@ -51,7 +55,7 @@ class PropertyController extends Controller
                 ? $property->favorites()->where('user_id', Auth::id())->exists()
                 : false;
 
-            return $property;
+            return PropertyRating::apply($property);
         });
 
         return $this->paginatedResponse($paginator);
@@ -59,7 +63,15 @@ class PropertyController extends Controller
 
     public function show($id)
     {
-        return Property::with(['images', 'reviews.user'])->findOrFail($id);
+        $property = Property::with(['images', 'reviews.user'])
+            ->withAvg('reviews', 'rating')
+            ->withCount('reviews')
+            ->findOrFail($id);
+
+        PropertyRating::apply($property);
+        $property->setAttribute('review_eligible_bookings', $this->eligibleReviewBookings($property));
+
+        return $property;
     }
 
     public function availability(Property $property)
@@ -152,5 +164,28 @@ class PropertyController extends Controller
         $property->delete();
 
         return response()->json(['message' => 'Deleted successfully']);
+    }
+
+    private function eligibleReviewBookings(Property $property)
+    {
+        if (! Auth::check() || (int) $property->user_id === (int) Auth::id()) {
+            return [];
+        }
+
+        return Booking::where('user_id', Auth::id())
+            ->where('property_id', $property->id)
+            ->whereIn('status', ['accepted', 'completed'])
+            ->whereDate('end_date', '<', today())
+            ->whereDoesntHave('review')
+            ->latest('end_date')
+            ->get(['id', 'start_date', 'end_date'])
+            ->map(function ($booking) {
+                return [
+                    'id' => $booking->id,
+                    'start_date' => Carbon::parse($booking->start_date)->toDateString(),
+                    'end_date' => Carbon::parse($booking->end_date)->toDateString(),
+                ];
+            })
+            ->values();
     }
 }

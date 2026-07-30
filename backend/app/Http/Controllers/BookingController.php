@@ -53,8 +53,8 @@ class BookingController extends Controller
 
         $overlap = Booking::where('property_id', $request->property_id)
             ->where('status', 'accepted')
-            ->where('start_date', '<', $request->end_date)
-            ->where('end_date', '>', $request->start_date)
+            ->whereDate('start_date', '<', $request->end_date)
+            ->whereDate('end_date', '>', $request->start_date)
             ->exists();
 
         if ($overlap) {
@@ -140,8 +140,8 @@ class BookingController extends Controller
         $overlap = Booking::where('property_id', $booking->property_id)
             ->where('id', '!=', $booking->id)
             ->where('status', 'accepted')
-            ->where('start_date', '<', $booking->end_date)
-            ->where('end_date', '>', $booking->start_date)
+            ->whereDate('start_date', '<', $booking->end_date)
+            ->whereDate('end_date', '>', $booking->start_date)
             ->exists();
 
         if ($overlap) {

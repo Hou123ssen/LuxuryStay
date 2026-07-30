@@ -7,6 +7,7 @@ import { propertyService } from '../api/propertyApi';
 import BookingCalendar from '../../bookings/components/BookingCalendar';
 import ReviewForm from '../components/ReviewForm';
 import DeleteConfirmModal from '../../../shared/components/common/DeleteConfirmModal';
+import RatingDisplay from '../../../shared/components/common/RatingDisplay';
 import { useAuth } from '../../../app/providers/AuthContext';
 import toast from 'react-hot-toast';
 import {
@@ -352,15 +353,19 @@ export default function PropertyDetail() {
                   <div className="flex items-center gap-2 mt-2 text-cream/45 text-sm flex-wrap">
                     <FiMapPin size={12} />
                     <span>{property.address || property.city}</span>
-                    {property.rating && (
-                      <>
-                        <span className="text-gold/30">·</span>
-                        <FiStar size={12} className="text-gold" fill="currentColor" />
-                        <span className="text-gold">{Number(property.rating).toFixed(1)}</span>
-                        <span className="text-cream/30">({reviews.length} reviews)</span>
-                      </>
-                    )}
+                    <span className="text-gold/30">-</span>
+                    <RatingDisplay
+                      rating={property.public_rating}
+                      count={property.reviews_count}
+                      label={property.rating_label}
+                      size="lg"
+                    />
                   </div>
+                  {property.average_rating !== null && property.average_rating !== undefined && (
+                    <p className="mt-1 text-xs text-cream/35">
+                      Guest average {Number(property.average_rating).toFixed(1)} from {property.reviews_count} {Number(property.reviews_count) === 1 ? 'review' : 'reviews'}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
@@ -475,9 +480,10 @@ export default function PropertyDetail() {
               ) : (
                 <p className="text-cream/30 text-sm mb-6">No reviews yet. Be the first!</p>
               )}
-              {!isOwner && (
+              {!isOwner && (property.review_eligible_bookings || []).length > 0 && (
                 <ReviewForm
                   propertyId={property.id}
+                  eligibleBookings={property.review_eligible_bookings || []}
                   onSuccess={() => propertyService.get(id).then(r => setProperty(r.data?.data || r.data))}
                 />
               )}

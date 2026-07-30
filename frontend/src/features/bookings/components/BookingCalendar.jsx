@@ -8,6 +8,7 @@ import { useAuth } from '../../../app/providers/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { FiCalendar } from 'react-icons/fi';
+import RatingDisplay from '../../../shared/components/common/RatingDisplay';
 
 function parseDateStringAsLocalDate(value) {
   const [year, month, day] = value.split('-').map(Number);
@@ -118,9 +119,11 @@ export default function BookingCalendar({ property }) {
           <span className="text-2xl font-display text-gold">${Number(property.price_per_night).toLocaleString()}</span>
           <span className="text-cream/40 text-sm"> / night</span>
         </div>
-        {property.rating && (
-          <span className="text-xs text-cream/50">★ {Number(property.rating).toFixed(1)}</span>
-        )}
+        <RatingDisplay
+          rating={property.public_rating}
+          count={property.reviews_count}
+          showEmpty={false}
+        />
       </div>
 
       {/* Date picker */}

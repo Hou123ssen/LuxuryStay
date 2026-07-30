@@ -1,19 +1,31 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { reviewService } from "../api/propertyApi";
 import { useAuth } from "../../../app/providers/AuthContext";
 import toast from "react-hot-toast";
 import { FiStar } from "react-icons/fi";
 
-export default function ReviewForm({ propertyId, onSuccess }) {
+export default function ReviewForm({ propertyId, eligibleBookings = [], onSuccess }) {
   const { isAuth } = useAuth();
   const [rating, setRating] = useState(0);
   const [hover, setHover] = useState(0);
   const [comment, setComment] = useState("");
+  const [bookingId, setBookingId] = useState("");
   const [loading, setLoad] = useState(false);
 
+  useEffect(() => {
+    if (eligibleBookings.length === 1) {
+      setBookingId(String(eligibleBookings[0].id));
+    }
+  }, [eligibleBookings]);
+
   if (!isAuth) return null;
+  if (eligibleBookings.length === 0) return null;
 
   const submit = async () => {
+    if (!bookingId) {
+      toast.error("Please select the completed stay to review");
+      return;
+    }
     if (!rating) {
       toast.error("Please select a rating");
       return;
@@ -24,25 +36,41 @@ export default function ReviewForm({ propertyId, onSuccess }) {
     }
     setLoad(true);
     try {
-      await reviewService.create({ property_id: propertyId, rating, comment });
+      await reviewService.create({
+        property_id: propertyId,
+        booking_id: bookingId,
+        rating,
+        comment,
+      });
       toast.success("Review submitted!");
       setRating(0);
       setComment("");
+      setBookingId("");
       onSuccess?.();
     } catch (err) {
-      if (err.response?.status === 403) {
-        toast.error(err.response.data.message || "You must book first");
-        return;
-      }
-
-      toast.error("Could not submit review");
+      toast.error(err.response?.data?.message || "Could not submit review");
+    } finally {
+      setLoad(false);
     }
-    setLoad(false);
   };
 
   return (
     <div className="luxury-card rounded-2xl p-5">
       <h3 className="font-display text-xl text-cream mb-4">Leave a Review</h3>
+      {eligibleBookings.length > 1 && (
+        <select
+          value={bookingId}
+          onChange={(e) => setBookingId(e.target.value)}
+          className="luxury-input w-full px-4 py-3 rounded-xl text-sm mb-4"
+        >
+          <option value="">Select completed stay</option>
+          {eligibleBookings.map((booking) => (
+            <option key={booking.id} value={booking.id}>
+              {booking.start_date?.slice(0, 10)} - {booking.end_date?.slice(0, 10)}
+            </option>
+          ))}
+        </select>
+      )}
       <div className="flex gap-1 mb-4">
         {[1, 2, 3, 4, 5].map((n) => (
           <button
@@ -65,7 +93,7 @@ export default function ReviewForm({ propertyId, onSuccess }) {
       />
       <button
         onClick={submit}
-        disabled={loading}
+        disabled={loading || !bookingId}
         className="btn-gold px-6 py-2.5 rounded-xl text-sm font-medium"
       >
         {loading ? "Submitting…" : "Submit Review"}

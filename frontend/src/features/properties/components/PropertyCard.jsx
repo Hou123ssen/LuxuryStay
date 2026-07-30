@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FiHeart, FiStar, FiMapPin } from "react-icons/fi";
+import { FiHeart, FiMapPin } from "react-icons/fi";
 import { STORAGE_URL } from "../../../shared/api/api";
 import { favoriteService } from "../../favorites/api/favoriteApi";
 import { useAuth } from "../../../app/providers/AuthContext";
+import RatingDisplay from "../../../shared/components/common/RatingDisplay";
 import toast from "react-hot-toast";
 
 function resolveImage(raw) {
@@ -151,12 +152,12 @@ export default function PropertyCard({
           <h3 className="font-display text-lg text-cream leading-tight line-clamp-1">
             {propertyTitle}
           </h3>
-          {property.rating && (
-            <span className="flex items-center gap-1 text-xs text-gold shrink-0 mt-1">
-              <FiStar size={11} fill="currentColor" />{" "}
-              {Number(property.rating).toFixed(1)}
-            </span>
-          )}
+          <RatingDisplay
+            rating={property.public_rating}
+            count={property.reviews_count}
+            label={property.rating_label}
+            className="shrink-0 mt-1"
+          />
         </div>
 
         <div className="flex items-center gap-1 text-cream/45 text-xs mb-3">
