@@ -1,223 +1,62 @@
-import { useState, useEffect, useRef } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { STORAGE_URL } from '../../../shared/api/api';
-import { bookingService } from '../api/bookingApi';
-import { useAuth } from '../../../app/providers/AuthContext';
-import { format } from 'date-fns';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { FiCalendar } from 'react-icons/fi';
 import toast from 'react-hot-toast';
-import {
-  FiCalendar, FiMapPin, FiClock,
-  FiArrowRight, FiCheck, FiX, FiMessageCircle
-} from 'react-icons/fi';
+import Pagination from '../../../shared/components/common/Pagination';
+import { bookingService } from '../api/bookingApi';
+import BookingCard from '../components/BookingCard';
+import { useBookingsPagination } from '../hooks/useBookingsPagination';
 
-const STATUS_STYLES = {
-  accepted:  'bg-green-500/10 text-green-400 border-green-500/20',
-  confirmed: 'bg-green-500/10 text-green-400 border-green-500/20',
-  pending:   'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
-  rejected:  'bg-red-500/10 text-red-400 border-red-500/20',
-  completed: 'bg-cream/10 text-cream/60 border-cream/10',
-};
-
-const QUERY_TAB_TO_STATE = {
-  upcoming: 'upcoming',
-  past: 'past',
-  'owner-bookings': 'owner',
-};
-
-const STATE_TAB_TO_QUERY = {
-  upcoming: 'upcoming',
-  past: 'past',
-  owner: 'owner-bookings',
-};
+const TABS = [
+  { key: 'upcoming', label: 'Upcoming' },
+  { key: 'past', label: 'Past' },
+  { key: 'owner', label: "My Properties' Bookings" },
+];
 
 export default function Bookings() {
-  const navigate     = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const { user }     = useAuth();
-  const [bookings,   setBookings]   = useState([]);
-  const [myProps,    setMyProps]    = useState([]); // حجوزات ملكياتي
-  const [loading,    setLoad]       = useState(true);
-  const [tab,        setTab]        = useState(QUERY_TAB_TO_STATE[searchParams.get('tab')] || 'upcoming');
-  const [actionLoad, setActionLoad] = useState(null); // id الحجز الجاري عليه action
-
-  const [highlightedBookingId, setHighlightedBookingId] = useState(searchParams.get('booking_id'));
-  const bookingRefs = useRef({});
-  const targetBookingId = searchParams.get('booking_id');
-
-  useEffect(() => {
-    (async () => {
-      try {
-        // حجوزاتي كعميل
-        const res = await bookingService.list();
-        setBookings(res.data?.data || res.data);
-
-        // حجوزات ملكياتي كمالك
-        const ownerRes = await bookingService.ownerBookings();
-        setMyProps(ownerRes.data?.data || ownerRes.data || []);
-      } catch {
-        setBookings([]);
-      }
-      setLoad(false);
-    })();
-  }, []);
+  const navigate = useNavigate();
+  const {
+    items: shown,
+    setItems: setShown,
+    meta,
+    loading,
+    tab,
+    page,
+    bookingRefs,
+    highlightedBookingId,
+    handleTabChange,
+    goToPage,
+  } = useBookingsPagination();
+  const [actionLoad, setActionLoad] = useState(null);
 
   const handleAccept = async (id) => {
     setActionLoad(id);
     try {
       await bookingService.accept(id);
-      setMyProps(prev => prev.map(b => b.id === id ? { ...b, status: 'accepted' } : b));
+      setShown((prev) => prev.map((booking) => (
+        booking.id === id ? { ...booking, status: 'accepted' } : booking
+      )));
       toast.success('Booking accepted!');
     } catch (err) {
       toast.error(err.response?.data?.message || err.response?.data?.error || 'Failed to accept booking');
+    } finally {
+      setActionLoad(null);
     }
-    setActionLoad(null);
   };
 
   const handleReject = async (id) => {
     setActionLoad(id);
     try {
       await bookingService.reject(id);
-      setMyProps(prev => prev.map(b => b.id === id ? { ...b, status: 'rejected' } : b));
+      setShown((prev) => prev.map((booking) => (
+        booking.id === id ? { ...booking, status: 'rejected' } : booking
+      )));
       toast.success('Booking rejected');
     } catch (err) {
       toast.error(err.response?.data?.message || err.response?.data?.error || 'Failed to reject booking');
+    } finally {
+      setActionLoad(null);
     }
-    setActionLoad(null);
-  };
-
-  const now      = new Date();
-  const upcoming = bookings.filter(b => new Date(b.end_date) >= now);
-  const past     = bookings.filter(b => new Date(b.end_date) < now);
-  const shown    = tab === 'upcoming' ? upcoming : tab === 'past' ? past : myProps;
-
-  useEffect(() => {
-    const requestedTab = QUERY_TAB_TO_STATE[searchParams.get('tab')];
-    if (requestedTab) setTab(requestedTab);
-    setHighlightedBookingId(searchParams.get('booking_id'));
-  }, [searchParams]);
-
-  useEffect(() => {
-    if (loading || !targetBookingId) return undefined;
-
-    const target = shown.find(b => String(b.id) === String(targetBookingId));
-    if (!target) return undefined;
-
-    setHighlightedBookingId(targetBookingId);
-    window.setTimeout(() => {
-      bookingRefs.current[targetBookingId]?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center',
-      });
-    }, 80);
-
-    const timer = window.setTimeout(() => setHighlightedBookingId(null), 3500);
-    return () => window.clearTimeout(timer);
-  }, [loading, targetBookingId, tab, bookings, myProps]);
-
-  const handleTabChange = (nextTab) => {
-    setTab(nextTab);
-    const next = new URLSearchParams(searchParams);
-    next.set('tab', STATE_TAB_TO_QUERY[nextTab] || nextTab);
-    next.delete('booking_id');
-    setSearchParams(next);
-  };
-
-  const nights = (b) => Math.max(1, Math.round(
-    (new Date(b.end_date) - new Date(b.start_date)) / 86400000
-  ));
-
-  const BookingCard = ({ b, isOwnerView = false }) => {
-    const prop  = b.property || {};
-    const img   = prop.images?.[0]?.path
-      ? `${STORAGE_URL}/storage/${prop.images[0].path}`
-      : 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400&q=70';
-    const n     = nights(b);
-    const total = n * Number(prop.price_per_night || 0);
-
-    return (
-      <div className="luxury-card rounded-2xl overflow-hidden flex flex-col sm:flex-row">
-        {/* Image */}
-        <div className="w-full sm:w-48 h-40 sm:h-auto shrink-0 overflow-hidden">
-          <img src={img} className="w-full h-full object-cover"
-               onError={e => e.target.src = 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400&q=70'} />
-        </div>
-
-        {/* Details */}
-        <div className="flex-1 p-5 flex flex-col justify-between">
-          <div>
-            <div className="flex items-start justify-between gap-3 mb-2 flex-wrap">
-              <div>
-                <h3 className="font-display text-xl text-cream">{prop.title || prop.name || 'Property'}</h3>
-                <div className="flex items-center gap-1 text-cream/40 text-xs mt-0.5">
-                  <FiMapPin size={10} /><span>{prop.city || '—'}</span>
-                </div>
-                {/* اسم العميل للمالك */}
-                {isOwnerView && b.user && (
-                  <p className="text-xs text-gold/70 mt-1">👤 {b.user.name} · {b.user.email}</p>
-                )}
-              </div>
-              {b.status && (
-                <span className={`px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wider border ${STATUS_STYLES[b.status] || STATUS_STYLES.pending}`}>
-                  {b.status}
-                </span>
-              )}
-            </div>
-
-            <div className="flex flex-wrap gap-4 mt-3 text-sm text-cream/55">
-              <div className="flex items-center gap-1.5">
-                <FiCalendar size={12} className="text-gold/60" />
-                <span>{format(new Date(b.start_date), 'MMM d')} — {format(new Date(b.end_date), 'MMM d, yyyy')}</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <FiClock size={12} className="text-gold/60" />
-                <span>{n} night{n > 1 ? 's' : ''}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between mt-4 pt-4 border-t border-gold/8 flex-wrap gap-3">
-            {total > 0 && (
-              <div>
-                <span className="text-gold font-medium">${total.toLocaleString()}</span>
-                <span className="text-cream/30 text-xs"> total</span>
-              </div>
-            )}
-
-            <div className="flex items-center gap-2 ml-auto">
-              {/* زر Chat مع العميل/المالك */}
-              <button
-                onClick={() => navigate(`/chat?property_id=${prop.id}`)}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gold/25 text-gold/70 hover:border-gold hover:text-gold transition-colors text-xs">
-                <FiMessageCircle size={13} /> Chat
-              </button>
-
-              {/* أزرار Accept/Reject للمالك فقط على pending */}
-              {isOwnerView && b.status === 'pending' && (
-                <>
-                  <button
-                    onClick={() => handleReject(b.id)}
-                    disabled={actionLoad === b.id}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors text-xs disabled:opacity-50">
-                    {actionLoad === b.id ? '...' : <><FiX size={13} /> Reject</>}
-                  </button>
-                  <button
-                    onClick={() => handleAccept(b.id)}
-                    disabled={actionLoad === b.id}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-green-500/15 border border-green-500/30 text-green-400 hover:bg-green-500/25 transition-colors text-xs disabled:opacity-50">
-                    {actionLoad === b.id ? '...' : <><FiCheck size={13} /> Accept</>}
-                  </button>
-                </>
-              )}
-
-              <button onClick={() => navigate(`/properties/${prop.id}`)}
-                className="flex items-center gap-1.5 text-xs text-gold/70 hover:text-gold transition-colors">
-                View <FiArrowRight size={11} />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
   };
 
   return (
@@ -231,54 +70,74 @@ export default function Bookings() {
         </h1>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-8 p-1 rounded-xl w-fit"
-           style={{ background: 'rgba(28,28,46,0.8)', border: '1px solid rgba(201,168,76,0.1)' }}>
-        {[
-          { key: 'upcoming', label: `Upcoming (${upcoming.length})` },
-          { key: 'past',     label: `Past (${past.length})` },
-          { key: 'owner',    label: `My Properties' Bookings (${myProps.length})` },
-        ].map(t => (
-          <button key={t.key} onClick={() => handleTabChange(t.key)}
-            className={`px-4 py-2 rounded-lg text-sm transition-all ${
-              tab === t.key ? 'bg-gold text-obsidian font-medium' : 'text-cream/50 hover:text-cream'
-            }`}>
-            {t.label}
+      <div
+        className="flex gap-1 mb-8 p-1 rounded-xl w-fit max-w-full overflow-x-auto"
+        style={{ background: 'rgba(28,28,46,0.8)', border: '1px solid rgba(201,168,76,0.1)' }}
+      >
+        {TABS.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            onClick={() => handleTabChange(item.key)}
+            className={`px-4 py-2 rounded-lg text-sm transition-all whitespace-nowrap ${
+              tab === item.key ? 'bg-gold text-obsidian font-medium' : 'text-cream/50 hover:text-cream'
+            }`}
+          >
+            {item.label}
+            {tab === item.key && meta?.total !== undefined ? ` (${meta.total})` : ''}
           </button>
         ))}
       </div>
 
-      {/* Content */}
       {loading ? (
         <div className="space-y-4">
-          {[1,2].map(i => <div key={i} className="h-40 shimmer rounded-2xl" />)}
+          {[1, 2].map((item) => (
+            <div key={item} className="h-40 shimmer rounded-2xl" />
+          ))}
         </div>
       ) : shown.length === 0 ? (
         <div className="text-center py-24">
           <FiCalendar size={40} className="mx-auto text-cream/15 mb-4" />
           <h3 className="font-display text-2xl text-cream/40 mb-2">No bookings here</h3>
           {tab !== 'owner' && (
-            <button onClick={() => navigate('/properties')} className="btn-gold px-6 py-2.5 rounded-full text-sm mt-4">
+            <button
+              type="button"
+              onClick={() => navigate('/properties')}
+              className="btn-gold px-6 py-2.5 rounded-full text-sm mt-4"
+            >
               Explore Properties
             </button>
           )}
         </div>
       ) : (
-        <div className="space-y-4">
-          {shown.map((b, i) => (
-            <div
-              key={b.id}
-              ref={(el) => { bookingRefs.current[b.id] = el; }}
-              className={`fade-up fade-up-${Math.min(i+1,4)} rounded-2xl transition-all duration-500 ${
-                String(highlightedBookingId) === String(b.id)
-                  ? 'ring-2 ring-gold/70 shadow-[0_0_32px_rgba(201,168,76,0.22)]'
-                  : 'ring-0'
-              }`}
-            >
-              <BookingCard b={b} isOwnerView={tab === 'owner'} />
-            </div>
-          ))}
-        </div>
+        <>
+          <div className="space-y-4">
+            {shown.map((booking, index) => (
+              <div
+                key={booking.id}
+                ref={(element) => {
+                  bookingRefs.current[booking.id] = element;
+                }}
+                className={`fade-up fade-up-${Math.min(index + 1, 4)} rounded-2xl transition-all duration-500 ${
+                  String(highlightedBookingId) === String(booking.id)
+                    ? 'ring-2 ring-gold/70 shadow-[0_0_32px_rgba(201,168,76,0.22)]'
+                    : 'ring-0'
+                }`}
+              >
+                <BookingCard
+                  booking={booking}
+                  isOwnerView={tab === 'owner'}
+                  actionLoad={actionLoad}
+                  onAccept={handleAccept}
+                  onReject={handleReject}
+                  onNavigate={navigate}
+                />
+              </div>
+            ))}
+          </div>
+
+          <Pagination meta={meta} currentPage={page} onPageChange={goToPage} />
+        </>
       )}
     </div>
   );

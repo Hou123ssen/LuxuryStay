@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
-import { notificationService } from "../api/notificationApi";
+import { useState } from "react";
 import { chatService } from "../../chat/api/chatApi";
 import { bookingService } from "../../bookings/api/bookingApi";
 import { useNavigate } from 'react-router-dom';
-import { notifyNavbarCountsChanged } from "../../../shared/utils/navbarCountsEvents";
+import Pagination from "../../../shared/components/common/Pagination";
+import { useNotificationsPagination } from "../hooks/useNotificationsPagination";
 
 import { format } from "date-fns";
 import {
@@ -16,62 +16,24 @@ import {
 import toast from "react-hot-toast";
 
 export default function Notifications() {
-  const [notifs, setNotifs] = useState([]);
-  const [loading, setLoad] = useState(true);
+  const {
+    notifs,
+    setNotifs,
+    meta,
+    loading,
+    page,
+    goToPage,
+    markAllRead,
+    markOneRead,
+  } = useNotificationsPagination();
   const [actionLoad, setActionLoad] = useState(null);
   const navigate = useNavigate();
 
-
-  const fetchNotifs = async () => {
+  const handleMarkAllRead = async () => {
     try {
-      const res = await notificationService.list();
-      const loaded = res.data?.data || res.data || [];
-      const hasUnread = loaded.some((n) => !n.read);
-
-      if (hasUnread) {
-        const readRes = await notificationService.markAllAsRead();
-        setNotifs(loaded.map((n) => ({ ...n, read: true })));
-        notifyNavbarCountsChanged({
-          unread_notifications_count: readRes.data?.unread_notifications_count ?? 0,
-        });
-      } else {
-        setNotifs(loaded);
-        notifyNavbarCountsChanged();
-      }
-    } catch (err) {
-      console.warn('Could not load or mark notifications as read.', err.response?.status || err.message);
-      setNotifs([]);
-    }
-    setLoad(false);
-  };
-
-  useEffect(() => {
-    fetchNotifs();
-  }, []);
-
-  const markAllRead = async () => {
-    try {
-      const res = await notificationService.markAllAsRead();
-      setNotifs((prev) => prev.map((n) => ({ ...n, read: true })));
-      notifyNavbarCountsChanged({
-        unread_notifications_count: res.data?.unread_notifications_count ?? 0,
-      });
+      await markAllRead();
     } catch (err) {
       console.warn('Could not mark all notifications as read.', err.response?.status || err.message);
-    }
-  };
-
-  const markOneRead = async (id) => {
-    try {
-      const res = await notificationService.markAsRead(id);
-      setNotifs((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
-      );
-      notifyNavbarCountsChanged({
-        unread_notifications_count: res.data?.unread_notifications_count,
-      });
-    } catch (err) {
-      console.warn('Could not mark notification as read.', err.response?.status || err.message);
     }
   };
 
@@ -170,7 +132,7 @@ export default function Notifications() {
         </div>
         {unreadCount > 0 && (
           <button
-            onClick={markAllRead}
+            onClick={handleMarkAllRead}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-gold/25 text-gold/70 hover:border-gold hover:text-gold transition-colors text-sm"
           >
             <FiCheckCircle size={13} /> Mark all read
@@ -194,14 +156,15 @@ export default function Notifications() {
           <p className="text-cream/25 text-sm">No notifications yet</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {notifs.map((n, i) => (
-            <div
-              key={n.id}
-              className={`luxury-card rounded-2xl px-5 py-4 fade-up fade-up-${Math.min(i + 1, 4)} transition-all ${
-                !n.read ? "border-gold/25" : "opacity-60"
-              }`}
-            >
+        <>
+          <div className="space-y-3">
+            {notifs.map((n, i) => (
+              <div
+                key={n.id}
+                className={`luxury-card rounded-2xl px-5 py-4 fade-up fade-up-${Math.min(i + 1, 4)} transition-all ${
+                  !n.read ? "border-gold/25" : "opacity-60"
+                }`}
+              >
               <div className="flex items-start gap-4">
                 {/* Icon */}
                 <div
@@ -315,9 +278,11 @@ export default function Notifications() {
                   <div className="w-2 h-2 rounded-full bg-gold shrink-0 mt-1.5" />
                 )}
               </div>
-            </div>
-          ))}
-        </div>
+              </div>
+            ))}
+          </div>
+          <Pagination meta={meta} currentPage={page} onPageChange={goToPage} />
+        </>
       )}
     </div>
   );

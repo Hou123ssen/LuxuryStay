@@ -12,14 +12,25 @@ use Illuminate\Http\Request;
 class BookingController extends Controller
 {
     // ── GET /api/bookings ─────────────────────────────────────────────────────
-    public function index()
+    public function index(Request $request)
     {
-        $bookings = Booking::with('property.images')
+        $query = Booking::with('property.images')
             ->where('user_id', Auth::id())
-            ->latest()
-            ->get();
+            ->latest();
 
-        return response()->json(['data' => $bookings]);
+        if ($request->query('tab') === 'upcoming') {
+            $query->whereDate('end_date', '>=', Carbon::today());
+        }
+
+        if ($request->query('tab') === 'past') {
+            $query->whereDate('end_date', '<', Carbon::today());
+        }
+
+        $bookings = $query
+            ->paginate($this->perPage($request, 6))
+            ->withQueryString();
+
+        return $this->paginatedResponse($bookings);
     }
 
     // ── POST /api/bookings ────────────────────────────────────────────────────
@@ -193,16 +204,17 @@ class BookingController extends Controller
     }
 
     // ── حجوزات ملكيات المالك ─────────────────────────────────────────────────
-    public function ownerBookings()
+    public function ownerBookings(Request $request)
     {
         $propertyIds = Property::where('user_id', Auth::id())->pluck('id');
 
         $bookings = Booking::with(['property.images', 'user'])
             ->whereIn('property_id', $propertyIds)
             ->latest()
-            ->get();
+            ->paginate($this->perPage($request, 6))
+            ->withQueryString();
 
-        return response()->json(['data' => $bookings]);
+        return $this->paginatedResponse($bookings);
     }
 
     public function destroy($id)

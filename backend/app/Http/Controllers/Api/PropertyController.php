@@ -42,13 +42,19 @@ class PropertyController extends Controller
                 break;
         }
 
-        return $query->paginate(20)->through(function ($property) {
+        $paginator = $query
+            ->paginate($this->perPage($request, 12))
+            ->withQueryString();
+
+        $paginator->getCollection()->transform(function ($property) {
             $property->is_favorite = Auth::check()
                 ? $property->favorites()->where('user_id', Auth::id())->exists()
                 : false;
 
             return $property;
         });
+
+        return $this->paginatedResponse($paginator);
     }
 
     public function show($id)

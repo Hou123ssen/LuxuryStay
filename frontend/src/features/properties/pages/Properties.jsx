@@ -1,54 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { propertyService } from '../api/propertyApi';
+import Pagination from '../../../shared/components/common/Pagination';
 import PropertyCard from '../components/PropertyCard';
 import PropertyFilters from '../components/PropertyFilters';
-import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';
+import { usePropertiesPagination } from '../hooks/usePropertiesPagination';
 
 const SKELETON = Array(6).fill(0);
 
 export default function Properties() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [properties, setProperties] = useState([]);
-  const [meta,        setMeta]       = useState(null);
-  const [loading,     setLoad]       = useState(true);
-  const [filters, setFilters] = useState({
-    city:      searchParams.get('city')      || '',
-    type:      searchParams.get('type')      || '',
-    min_price: searchParams.get('min_price') || '',
-    max_price: searchParams.get('max_price') || '',
-    sort:      searchParams.get('sort')      || 'latest',
-    page:      Number(searchParams.get('page')) || 1,
-  });
-
-  const fetchProperties = useCallback(async (params) => {
-    setLoad(true);
-    try {
-      const clean = Object.fromEntries(Object.entries(params).filter(([,v]) => v !== '' && v !== null));
-      const res   = await propertyService.list(clean);
-      const payload = res.data;
-      const listSource = payload.data || payload;
-      const items = listSource.data || listSource;
-      const pageMeta = payload.meta || payload.data?.meta || null;
-
-      setProperties(Array.isArray(items) ? items : []);
-      setMeta(pageMeta);
-    } catch {
-      setProperties([]);
-      setMeta(null);
-    }
-    setLoad(false);
-  }, []);
-
-  useEffect(() => {
-    fetchProperties(filters);
-    const params = {};
-    Object.entries(filters).forEach(([k,v]) => { if (v) params[k] = v; });
-    setSearchParams(params);
-  }, [filters]);
-
-  const resetFilters = () => setFilters({ city: '', type: '', min_price: '', max_price: '', sort: 'latest', page: 1 });
-  const goPage = (p) => setFilters(f => ({ ...f, page: p }));
+  const { properties, meta, loading, filters, setFilters, resetFilters, goToPage } =
+    usePropertiesPagination();
 
   return (
     <div className="min-h-screen px-4 py-10 max-w-7xl mx-auto">
@@ -96,28 +55,7 @@ export default function Properties() {
             ))}
           </div>
 
-          {/* Pagination */}
-          {meta && meta.last_page > 1 && (
-            <div className="flex items-center justify-center gap-2 mt-12">
-              <button onClick={() => goPage(filters.page - 1)} disabled={filters.page <= 1}
-                className="p-2 rounded-xl border border-gold/20 text-cream/50 hover:border-gold/50 hover:text-cream disabled:opacity-30 transition-colors">
-                <FiChevronLeft />
-              </button>
-              {Array.from({ length: meta.last_page }, (_, i) => i+1).map(n => (
-                <button key={n} onClick={() => goPage(n)}
-                  className={`w-9 h-9 rounded-xl text-sm transition-all ${
-                    n === filters.page
-                      ? 'bg-gold text-obsidian font-medium' : 'border border-gold/20 text-cream/50 hover:border-gold/50'
-                  }`}>
-                  {n}
-                </button>
-              ))}
-              <button onClick={() => goPage(filters.page + 1)} disabled={filters.page >= meta.last_page}
-                className="p-2 rounded-xl border border-gold/20 text-cream/50 hover:border-gold/50 hover:text-cream disabled:opacity-30 transition-colors">
-                <FiChevronRight />
-              </button>
-            </div>
-          )}
+          <Pagination meta={meta} currentPage={filters.page} onPageChange={goToPage} />
         </>
       )}
     </div>
