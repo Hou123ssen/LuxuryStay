@@ -153,9 +153,10 @@ export default function PropertyCard({
             {propertyTitle}
           </h3>
           <RatingDisplay
-            rating={property.public_rating}
+            rating={property.average_rating}
             count={property.reviews_count}
             label={property.rating_label}
+            ratingState={property.rating_state}
             className="shrink-0 mt-1"
           />
         </div>

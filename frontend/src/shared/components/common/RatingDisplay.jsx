@@ -5,20 +5,24 @@ export default function RatingDisplay({
   average,
   count = 0,
   label = null,
+  ratingState = null,
   size = 'sm',
   showEmpty = true,
-  ariaPrefix = 'Marketplace rating',
+  variant = 'compact',
   className = '',
 }) {
   const reviewCount = Number(count || 0);
   const displayRating = rating ?? average;
-  const hasReviews = reviewCount > 0 && displayRating !== null && displayRating !== undefined;
-  const textSize = size === 'lg' ? 'text-sm' : 'text-xs';
-  const iconSize = size === 'lg' ? 14 : 11;
+  const state = ratingState || (reviewCount === 0 ? 'new' : reviewCount < 5 ? 'forming' : 'established');
+  const hasEstablishedRating = state === 'established' && displayRating !== null && displayRating !== undefined;
+  const isLarge = size === 'lg';
+  const textSize = isLarge ? 'text-sm' : 'text-xs';
+  const ratingTextSize = isLarge ? 'text-lg' : textSize;
+  const iconSize = isLarge ? 16 : 11;
 
-  if (!hasReviews && !showEmpty) return null;
+  if (state === 'new' && !showEmpty) return null;
 
-  if (!hasReviews) {
+  if (state === 'new') {
     return (
       <span
         className={`inline-flex items-center gap-1 rounded-full border border-gold/15 bg-gold/5 px-2 py-1 ${textSize} text-cream/40 ${className}`}
@@ -30,17 +34,69 @@ export default function RatingDisplay({
     );
   }
 
+  const stayLabel = reviewCount === 1 ? 'verified stay' : 'verified stays';
+  const formingLabel = label || `Rating forming · ${reviewCount} ${stayLabel}`;
+
+  if (state === 'forming') {
+    if (variant === 'detail') {
+      return (
+        <span
+          className={`inline-flex flex-col gap-0.5 ${className}`}
+          aria-label={`Rating forming based on ${reviewCount} ${stayLabel}. Overall rating will appear after 5 verified stays.`}
+        >
+          <span className={`inline-flex items-center gap-1 text-gold ${textSize}`}>
+            <FiStar size={iconSize} className="text-gold/55" />
+            <span>{formingLabel}</span>
+          </span>
+          <span className="text-xs text-cream/40">
+            Overall rating will appear after 5 verified stays.
+          </span>
+        </span>
+      );
+    }
+
+    return (
+      <span
+        className={`inline-flex items-center gap-1 rounded-full border border-gold/15 bg-gold/5 px-2 py-1 ${textSize} text-gold/75 ${className}`}
+        aria-label={`Rating forming based on ${reviewCount} ${stayLabel}`}
+      >
+        <FiStar size={iconSize} className="text-gold/55" />
+        {formingLabel}
+      </span>
+    );
+  }
+
+  if (!hasEstablishedRating && !showEmpty) return null;
+  if (!hasEstablishedRating) return null;
+
   const roundedRating = Number(displayRating).toFixed(1);
-  const reviewLabel = reviewCount === 1 ? 'review' : 'reviews';
+  const ariaLabel = `Guest rating ${roundedRating} out of 5 based on ${reviewCount} ${stayLabel}`;
+
+  if (variant === 'detail') {
+    return (
+      <span className={`inline-flex flex-col gap-0.5 ${className}`} aria-label={ariaLabel}>
+        <span className={`inline-flex items-center gap-1 text-gold ${ratingTextSize}`}>
+          <FiStar size={iconSize} fill="currentColor" />
+          <span>{roundedRating}</span>
+        </span>
+        <span className="text-xs text-cream/40">
+          Based on {reviewCount} {stayLabel}
+        </span>
+      </span>
+    );
+  }
 
   return (
     <span
       className={`inline-flex items-center gap-1 text-gold ${textSize} ${className}`}
-      aria-label={`${ariaPrefix} ${roundedRating} out of 5 based on ${reviewCount} ${reviewLabel}`}
+      aria-label={ariaLabel}
     >
       <FiStar size={iconSize} fill="currentColor" />
       <span>{roundedRating}</span>
-      <span className="text-cream/30">({reviewCount})</span>
+      <span className="text-cream/30">·</span>
+      <span className="text-cream/45 whitespace-nowrap">
+        {reviewCount} {stayLabel}
+      </span>
     </span>
   );
 }

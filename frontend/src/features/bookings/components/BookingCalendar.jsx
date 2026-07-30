@@ -120,8 +120,10 @@ export default function BookingCalendar({ property }) {
           <span className="text-cream/40 text-sm"> / night</span>
         </div>
         <RatingDisplay
-          rating={property.public_rating}
+          rating={property.average_rating}
           count={property.reviews_count}
+          label={property.rating_label}
+          ratingState={property.rating_state}
           showEmpty={false}
         />
       </div>

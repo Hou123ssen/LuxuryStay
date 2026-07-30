@@ -355,17 +355,14 @@ export default function PropertyDetail() {
                     <span>{property.address || property.city}</span>
                     <span className="text-gold/30">-</span>
                     <RatingDisplay
-                      rating={property.public_rating}
+                      rating={property.average_rating}
                       count={property.reviews_count}
                       label={property.rating_label}
+                      ratingState={property.rating_state}
                       size="lg"
+                      variant="detail"
                     />
                   </div>
-                  {property.average_rating !== null && property.average_rating !== undefined && (
-                    <p className="mt-1 text-xs text-cream/35">
-                      Guest average {Number(property.average_rating).toFixed(1)} from {property.reviews_count} {Number(property.reviews_count) === 1 ? 'review' : 'reviews'}
-                    </p>
-                  )}
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
