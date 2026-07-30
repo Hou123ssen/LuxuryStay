@@ -38,13 +38,13 @@ export default function ReviewForm({ propertyId, eligibleBookings = [], onSucces
     }
     setLoad(true);
     try {
-      await reviewService.create({
+      const res = await reviewService.create({
         property_id: propertyId,
         booking_id: bookingId,
         rating,
         comment,
       });
-      toast.success("Review submitted!");
+      toast.success(res.data?.message || "Review submitted!");
       setRating(0);
       setComment("");
       setBookingId("");

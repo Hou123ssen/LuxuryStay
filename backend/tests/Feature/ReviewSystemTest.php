@@ -19,6 +19,7 @@ class ReviewSystemTest extends TestCase
     {
         parent::setUp();
         Carbon::setTestNow('2026-07-30 12:00:00');
+        config(['reviews.risk.high_risk_threshold' => 80]);
     }
 
     protected function tearDown(): void
@@ -60,6 +61,158 @@ class ReviewSystemTest extends TestCase
 
         $review = Review::where('booking_id', $booking->id)->first();
         $this->assertNotNull($review->published_at);
+        $this->assertIsInt($review->risk_score);
+        $this->assertNotSame('127.0.0.1', $review->ip_hash);
+        $this->assertNotSame('Symfony', $review->user_agent_hash);
+    }
+
+    public function test_high_risk_review_becomes_pending_review_and_stays_private(): void
+    {
+        config(['reviews.risk.high_risk_threshold' => 70]);
+
+        $owner = User::factory()->create();
+        $guestA = User::factory()->create();
+        $guestB = User::factory()->create();
+        $property = $this->propertyFor($owner);
+        $this->reviewFor($guestA, $property, 5, 'Identical polished stay experience.');
+        $booking = $this->bookingFor($guestB, $property, [
+            'status' => 'accepted',
+            'end_date' => '2026-07-20',
+        ]);
+
+        $this
+            ->actingAs($guestB, 'sanctum')
+            ->withServerVariables([
+                'REMOTE_ADDR' => '203.0.113.8',
+                'HTTP_USER_AGENT' => 'LuxurrStay Test Browser',
+            ])
+            ->postJson('/api/reviews', [
+                'property_id' => $property->id,
+                'booking_id' => $booking->id,
+                'rating' => 5,
+                'comment' => 'Identical polished stay experience.',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('message', 'Your review was received and is being checked before publication.')
+            ->assertJsonMissingPath('data.status')
+            ->assertJsonMissingPath('data.risk_score')
+            ->assertJsonMissingPath('data.risk_reasons')
+            ->assertJsonMissingPath('data.ip_hash')
+            ->assertJsonMissingPath('data.user_agent_hash');
+
+        $review = Review::where('booking_id', $booking->id)->first();
+        $this->assertSame(Review::STATUS_PENDING_REVIEW, $review->status);
+        $this->assertNull($review->published_at);
+        $this->assertGreaterThanOrEqual(70, $review->risk_score);
+        $this->assertContains('DUPLICATE_CONTENT', $review->risk_reasons);
+        $this->assertNotSame('203.0.113.8', $review->ip_hash);
+        $this->assertNotSame('LuxurrStay Test Browser', $review->user_agent_hash);
+
+        $this
+            ->actingAs($guestB, 'sanctum')
+            ->getJson('/api/properties/'.$property->id)
+            ->assertOk()
+            ->assertJsonPath('average_rating', 5)
+            ->assertJsonPath('reviews_count', 1)
+            ->assertJsonPath('rating_state', 'forming')
+            ->assertJsonMissingPath('reviews.1')
+            ->assertJsonMissingPath('reviews.0.risk_score')
+            ->assertJsonMissingPath('reviews.0.risk_reasons')
+            ->assertJsonMissingPath('reviews.0.ip_hash')
+            ->assertJsonMissingPath('reviews.0.user_agent_hash');
+    }
+
+    public function test_one_star_alone_and_five_star_alone_are_not_fraud(): void
+    {
+        $owner = User::factory()->create();
+        $guestA = User::factory()->create(['created_at' => now()->subDays(10)]);
+        $guestB = User::factory()->create(['created_at' => now()->subDays(10)]);
+        $firstProperty = $this->propertyFor($owner, ['title' => 'One star fairness']);
+        $secondProperty = $this->propertyFor($owner, ['title' => 'Five star fairness']);
+
+        foreach ([[$guestA, $firstProperty, 1], [$guestB, $secondProperty, 5]] as [$guest, $property, $rating]) {
+            $booking = $this->bookingFor($guest, $property, [
+                'status' => 'accepted',
+                'end_date' => '2026-07-20',
+            ]);
+
+            $this
+                ->actingAs($guest, 'sanctum')
+                ->postJson('/api/reviews', [
+                    'property_id' => $property->id,
+                    'booking_id' => $booking->id,
+                    'rating' => $rating,
+                    'comment' => 'A distinct verified stay comment.',
+                ])
+                ->assertCreated()
+                ->assertJsonPath('message', 'Review submitted.');
+
+            $review = Review::where('booking_id', $booking->id)->first();
+            $this->assertSame(Review::STATUS_PUBLISHED, $review->status);
+        }
+    }
+
+    public function test_shared_ip_alone_does_not_hold_review_for_moderation(): void
+    {
+        $owner = User::factory()->create();
+        $property = $this->propertyFor($owner);
+
+        foreach ([
+            'Quiet arrival and a clean terrace.',
+            'Helpful host with an easy checkout.',
+            'Comfortable rooms near evening restaurants.',
+        ] as $comment) {
+            $guest = User::factory()->create(['created_at' => now()->subDays(10)]);
+            $booking = $this->bookingFor($guest, $property, [
+                'status' => 'accepted',
+                'end_date' => '2026-07-20',
+            ]);
+
+            $this
+                ->actingAs($guest, 'sanctum')
+                ->withServerVariables(['REMOTE_ADDR' => '198.51.100.24'])
+                ->postJson('/api/reviews', [
+                    'property_id' => $property->id,
+                    'booking_id' => $booking->id,
+                    'rating' => 4,
+                    'comment' => $comment,
+                ])
+                ->assertCreated()
+                ->assertJsonPath('message', 'Review submitted.');
+        }
+
+        $reviews = Review::where('property_id', $property->id)->latest('id')->get();
+        $this->assertSame(3, $reviews->count());
+        $this->assertTrue($reviews->every(fn (Review $review) => $review->status === Review::STATUS_PUBLISHED));
+        $this->assertContains('SHARED_NETWORK_CLUSTER', $reviews->first()->risk_reasons);
+    }
+
+    public function test_burst_pattern_increases_internal_risk(): void
+    {
+        $owner = User::factory()->create();
+        $property = $this->propertyFor($owner);
+
+        foreach ([1, 2, 3, 4] as $number) {
+            $guest = User::factory()->create();
+            $booking = $this->bookingFor($guest, $property, [
+                'status' => 'accepted',
+                'end_date' => '2026-07-20',
+            ]);
+
+            $this
+                ->actingAs($guest, 'sanctum')
+                ->postJson('/api/reviews', [
+                    'property_id' => $property->id,
+                    'booking_id' => $booking->id,
+                    'rating' => 4,
+                    'comment' => 'Burst pattern comment '.$number,
+                ])
+                ->assertCreated();
+        }
+
+        $review = Review::where('property_id', $property->id)->latest('id')->first();
+        $this->assertContains('REVIEW_BURST', $review->risk_reasons);
+        $this->assertGreaterThan(0, $review->risk_score);
     }
 
     public function test_frontend_supplied_moderation_fields_are_ignored_on_review_creation(): void
@@ -781,7 +934,7 @@ class ReviewSystemTest extends TestCase
         ], $attributes));
     }
 
-    private function reviewFor(User $user, Property $property, int $rating): Review
+    private function reviewFor(User $user, Property $property, int $rating, string $comment = 'Lovely stay.'): Review
     {
         $booking = $this->bookingFor($user, $property);
 
@@ -790,7 +943,7 @@ class ReviewSystemTest extends TestCase
             'property_id' => $property->id,
             'booking_id' => $booking->id,
             'rating' => $rating,
-            'comment' => 'Lovely stay.',
+            'comment' => $comment,
         ]);
     }
 

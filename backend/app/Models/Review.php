@@ -26,6 +26,7 @@ class Review extends Model
     protected $casts = [
         'published_at' => 'datetime',
         'moderated_at' => 'datetime',
+        'risk_reasons' => 'array',
     ];
 
     protected $hidden = [
@@ -33,6 +34,10 @@ class Review extends Model
         'published_at',
         'moderated_at',
         'moderated_by',
+        'risk_score',
+        'risk_reasons',
+        'ip_hash',
+        'user_agent_hash',
     ];
 
     protected static function booted(): void

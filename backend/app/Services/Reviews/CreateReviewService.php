@@ -13,11 +13,15 @@ use Illuminate\Http\Exceptions\HttpResponseException;
 
 class CreateReviewService
 {
-    public function create(User $user, array $data): Review
+    public function __construct(private readonly ReviewRiskService $risk)
+    {
+    }
+
+    public function create(User $user, array $data, array $context = []): Review
     {
         try {
-            return DB::transaction(function () use ($user, $data) {
-                return $this->createInsideTransaction($user, $data);
+            return DB::transaction(function () use ($user, $data, $context) {
+                return $this->createInsideTransaction($user, $data, $context);
             });
         } catch (QueryException $exception) {
             if ($this->isUniqueConstraintViolation($exception)) {
@@ -28,7 +32,7 @@ class CreateReviewService
         }
     }
 
-    private function createInsideTransaction(User $user, array $data): Review
+    private function createInsideTransaction(User $user, array $data, array $context): Review
     {
         $property = Property::findOrFail($data['property_id']);
 
@@ -61,6 +65,9 @@ class CreateReviewService
             throw $this->duplicateReviewError();
         }
 
+        $risk = $this->risk->assess($user, $property, $booking, $data, $context);
+        $isHighRisk = $this->risk->isHighRisk((int) $risk['risk_score']);
+
         $review = new Review([
             'user_id' => $user->id,
             'property_id' => $property->id,
@@ -69,8 +76,12 @@ class CreateReviewService
             'comment' => $data['comment'] ?? null,
         ]);
 
-        $review->status = Review::STATUS_PUBLISHED;
-        $review->published_at = now();
+        $review->status = $isHighRisk ? Review::STATUS_PENDING_REVIEW : Review::STATUS_PUBLISHED;
+        $review->published_at = $isHighRisk ? null : now();
+        $review->risk_score = $risk['risk_score'];
+        $review->risk_reasons = $risk['risk_reasons'];
+        $review->ip_hash = $risk['ip_hash'];
+        $review->user_agent_hash = $risk['user_agent_hash'];
         $review->save();
 
         return $review->load('user');
