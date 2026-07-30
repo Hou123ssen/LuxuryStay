@@ -528,7 +528,9 @@ export default function Chat() {
                 return (
                   <button key={conv.id} onClick={() => openConversation(conv)}
                     className={`w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors border-b ${
-                      isActive ? 'bg-gold/8 border-gold/10' : 'hover:bg-white/3 border-white/4'
+                      isActive
+                        ? 'bg-[rgba(201,168,76,0.08)] border-[rgba(201,168,76,0.14)] shadow-[inset_3px_0_0_rgba(201,168,76,0.65)]'
+                        : 'border-[rgba(201,168,76,0.06)] hover:bg-[rgba(255,255,255,0.025)] hover:border-[rgba(201,168,76,0.10)]'
                     }`}>
                     {/* Avatar */}
                     <div className="w-10 h-10 rounded-full shrink-0 flex items-center justify-center text-sm font-medium"
