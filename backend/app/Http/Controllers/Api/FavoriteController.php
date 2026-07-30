@@ -27,11 +27,14 @@ class FavoriteController extends Controller
 
         return response()->json(['message' => 'Added']);
     }
-    public function index()
+    public function index(Request $request)
     {
-        return Favorite::with('property.images')
+        $favorites = Favorite::with('property.images')
             ->where('user_id', Auth::id())
             ->latest()
-            ->get();
+            ->paginate($this->perPage($request, 12))
+            ->withQueryString();
+
+        return $this->paginatedResponse($favorites);
     }
 }

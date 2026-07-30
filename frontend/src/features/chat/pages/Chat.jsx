@@ -5,6 +5,8 @@ import { format } from 'date-fns';
 import { FiBell, FiSend, FiMessageCircle, FiSearch, FiChevronLeft, FiPhone, FiPhoneOff } from 'react-icons/fi';
 import { useAuth } from '../../../app/providers/AuthContext';
 import toast from 'react-hot-toast';
+import Pagination from '../../../shared/components/common/Pagination';
+import { useConversationsPagination } from '../hooks/useConversationsPagination';
 import {
   enableIncomingCallAlerts,
   startIncomingCallAlert,
@@ -26,12 +28,19 @@ export default function Chat() {
   const { user }         = useAuth();
   const [searchParams]   = useSearchParams();
   const navigate         = useNavigate();
-  const [conversations,  setConversations]  = useState([]);
+  const {
+    conversations,
+    setConversations,
+    meta: conversationsMeta,
+    loading,
+    loadError,
+    page: conversationsPage,
+    goToPage: goToConversationsPage,
+    upsertConversation,
+  } = useConversationsPagination();
   const [activeConv,     setActiveConv]     = useState(null);
   const [messages,       setMessages]       = useState([]);
   const [newMsg,         setNewMsg]         = useState('');
-  const [loading,        setLoading]        = useState(true);
-  const [loadError,      setLoadError]      = useState('');
   const [sending,        setSending]        = useState(false);
   const [isStartingCall, setIsStartingCall] = useState(false);
   const [activeCallSession, setActiveCallSession] = useState(null);
@@ -46,62 +55,43 @@ export default function Chat() {
   const pollRef   = useRef(null);
   const activeCallPollRef = useRef(null);
   const incomingCallPollRef = useRef(null);
-
-  const upsertConversation = (conversation) => {
-    if (!conversation?.id) return;
-
-    setConversations(prev => {
-      const exists = prev.some(c => String(c.id) === String(conversation.id));
-
-      if (!exists) return [conversation, ...prev];
-
-      const updated = prev.map(c => String(c.id) === String(conversation.id) ? { ...c, ...conversation } : c);
-
-      return [
-        updated.find(c => String(c.id) === String(conversation.id)),
-        ...updated.filter(c => String(c.id) !== String(conversation.id)),
-      ];
-    });
-  };
+  const initialRouteHandledRef = useRef(false);
 
   // ── تحميل المحادثات ────────────────────────────────────────────────────────
   useEffect(() => {
-    (async () => {
-      try {
-        const res   = await chatService.getConversations();
-        const convs = res.data?.data || res.data || [];
-        setLoadError('');
-        setConversations(convs);
-
-        // فتح محادثة محددة من URL
-        const convIdParam = searchParams.get('conversation_id');
-        const propIdParam = searchParams.get('property_id');
-
-        if (convIdParam) {
-          const found = convs.find(c => String(c.id) === convIdParam);
-          if (found) openConversation(found);
-        } else if (propIdParam) {
-          try {
-            const cr           = await chatService.createConversation({ property_id: propIdParam });
-            const conversation = cr.data?.data || cr.data;
-
-            if (conversation?.id) {
-              upsertConversation(conversation);
-              openConversation(conversation);
-              navigate(`/chat?conversation_id=${conversation.id}`, { replace: true });
-            }
-          } catch (err) {
-            toast.error(err.response?.data?.message || 'Could not start conversation');
-          }
-        }
-      } catch {
-        setConversations([]);
-        setLoadError('Could not load conversations.');
-      }
-      setLoading(false);
-    })();
     return () => clearInterval(pollRef.current);
   }, []);
+
+  useEffect(() => {
+    if (loading || initialRouteHandledRef.current) return;
+
+    initialRouteHandledRef.current = true;
+    const convIdParam = searchParams.get('conversation_id');
+    const propIdParam = searchParams.get('property_id');
+
+    if (convIdParam) {
+      const found = conversations.find(c => String(c.id) === convIdParam);
+      if (found) openConversation(found);
+      return;
+    }
+
+    if (!propIdParam) return;
+
+    (async () => {
+      try {
+        const cr = await chatService.createConversation({ property_id: propIdParam });
+        const conversation = cr.data?.data || cr.data;
+
+        if (conversation?.id) {
+          upsertConversation(conversation);
+          openConversation(conversation);
+          navigate(`/chat?conversation_id=${conversation.id}`, { replace: true });
+        }
+      } catch (err) {
+        toast.error(err.response?.data?.message || 'Could not start conversation');
+      }
+    })();
+  }, [conversations, loading, navigate, searchParams, upsertConversation]);
 
   // ── تحميل الرسائل ─────────────────────────────────────────────────────────
   const markConversationAsRead = useCallback(async (convId) => {
@@ -527,51 +517,61 @@ export default function Chat() {
               <p className="text-cream/20 text-xs mt-1">Start by contacting a host from a property page.</p>
             </div>
           ) : (
-            conversations.map(conv => {
-              const other    = getOtherUser(conv);
-              const isActive = activeConv?.id === conv.id;
-              const lastMsg  = conv.last_message?.message || conv.last_message?.body || '';
-              const propertyLabel = getPropertyLabel(conv);
-              const unreadMessageCount = Number(conv.unread_message_count || 0);
+            <>
+              {conversations.map(conv => {
+                const other    = getOtherUser(conv);
+                const isActive = activeConv?.id === conv.id;
+                const lastMsg  = conv.last_message?.message || conv.last_message?.body || '';
+                const propertyLabel = getPropertyLabel(conv);
+                const unreadMessageCount = Number(conv.unread_message_count || 0);
 
-              return (
-                <button key={conv.id} onClick={() => openConversation(conv)}
-                  className={`w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors border-b ${
-                    isActive ? 'bg-gold/8 border-gold/10' : 'hover:bg-white/3 border-white/4'
-                  }`}>
-                  {/* Avatar */}
-                  <div className="w-10 h-10 rounded-full shrink-0 flex items-center justify-center text-sm font-medium"
-                    style={{ background: 'rgba(201,168,76,0.15)', color: 'var(--gold)' }}>
-                    {getAvatar(other?.name)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-center mb-0.5">
-                      <span className={`text-sm font-medium truncate ${isActive ? 'text-gold' : 'text-cream/80'}`}>
-                        {other?.name || 'User'}
-                      </span>
-                      <span className="ml-2 flex shrink-0 items-center gap-1.5">
-                        {unreadMessageCount > 0 && (
-                          <span className="min-w-5 rounded-full border border-gold/50 bg-gold px-1.5 py-0.5 text-center text-[10px] font-semibold leading-none text-[#0e0e1c] shadow-[0_0_18px_rgba(201,168,76,0.18)]">
-                            {unreadMessageCount}
-                          </span>
-                        )}
-                        {conv.last_message?.created_at && (
-                          <span className="text-[10px] text-cream/25">
-                            {format(new Date(conv.last_message.created_at), 'HH:mm')}
-                          </span>
-                        )}
-                      </span>
+                return (
+                  <button key={conv.id} onClick={() => openConversation(conv)}
+                    className={`w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors border-b ${
+                      isActive ? 'bg-gold/8 border-gold/10' : 'hover:bg-white/3 border-white/4'
+                    }`}>
+                    {/* Avatar */}
+                    <div className="w-10 h-10 rounded-full shrink-0 flex items-center justify-center text-sm font-medium"
+                      style={{ background: 'rgba(201,168,76,0.15)', color: 'var(--gold)' }}>
+                      {getAvatar(other?.name)}
                     </div>
-                    <p className="text-xs text-cream/35 truncate">
-                      {propertyLabel || lastMsg || 'Start a conversation'}
-                    </p>
-                    {lastMsg && (
-                      <p className="text-[10px] text-cream/25 truncate mt-0.5">{lastMsg}</p>
-                    )}
-                  </div>
-                </button>
-              );
-            })
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-center mb-0.5">
+                        <span className={`text-sm font-medium truncate ${isActive ? 'text-gold' : 'text-cream/80'}`}>
+                          {other?.name || 'User'}
+                        </span>
+                        <span className="ml-2 flex shrink-0 items-center gap-1.5">
+                          {unreadMessageCount > 0 && (
+                            <span className="min-w-5 rounded-full border border-gold/50 bg-gold px-1.5 py-0.5 text-center text-[10px] font-semibold leading-none text-[#0e0e1c] shadow-[0_0_18px_rgba(201,168,76,0.18)]">
+                              {unreadMessageCount}
+                            </span>
+                          )}
+                          {conv.last_message?.created_at && (
+                            <span className="text-[10px] text-cream/25">
+                              {format(new Date(conv.last_message.created_at), 'HH:mm')}
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                      <p className="text-xs text-cream/35 truncate">
+                        {propertyLabel || lastMsg || 'Start a conversation'}
+                      </p>
+                      {lastMsg && (
+                        <p className="text-[10px] text-cream/25 truncate mt-0.5">{lastMsg}</p>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+              <div className="px-3 pb-4">
+                <Pagination
+                  meta={conversationsMeta}
+                  currentPage={conversationsPage}
+                  onPageChange={goToConversationsPage}
+                  className="mt-4"
+                />
+              </div>
+            </>
           )}
         </div>
       </div>

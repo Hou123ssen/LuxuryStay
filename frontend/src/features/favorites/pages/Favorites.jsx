@@ -1,32 +1,12 @@
-import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { favoriteService } from '../api/favoriteApi';
+import Pagination from '../../../shared/components/common/Pagination';
 import PropertyCard from '../../properties/components/PropertyCard';
 import { FiHeart } from 'react-icons/fi';
+import { useFavoritesPagination } from '../hooks/useFavoritesPagination';
 
 export default function Favorites() {
   const navigate = useNavigate();
-  const [favorites, setFavorites] = useState([]);
-  const [loading,   setLoad]      = useState(true);
-
-useEffect(() => {
-  (async () => {
-    try {
-      const res = await favoriteService.list();
-      const data = res.data;
-
-      const list = Array.isArray(data)
-        ? data.map(f => f.property)
-        : data.data?.map(f => f.property) || [];
-
-      setFavorites(list.filter(Boolean));
-    } catch (err) {
-      console.error(err);
-      setFavorites([]);
-    }
-    setLoad(false);
-  })();
-}, []);
+  const { favorites, meta, loading, page, goToPage } = useFavoritesPagination();
 
   return (
     <div className="min-h-screen px-4 py-10 max-w-7xl mx-auto">
@@ -55,13 +35,16 @@ useEffect(() => {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {favorites.map((p, i) => (
-            <div key={p.id} className={`fade-up fade-up-${Math.min(i%3+1,4)}`}>
-              <PropertyCard property={p} isFavorited={true} />
-            </div>
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {favorites.map((p, i) => (
+              <div key={p.id} className={`fade-up fade-up-${Math.min(i%3+1,4)}`}>
+                <PropertyCard property={p} isFavorited={true} />
+              </div>
+            ))}
+          </div>
+          <Pagination meta={meta} currentPage={page} onPageChange={goToPage} />
+        </>
       )}
     </div>
   );

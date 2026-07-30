@@ -13,7 +13,7 @@ use Illuminate\Validation\ValidationException;
 
 class ConversationController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         $userId = (int) Auth::id();
 
@@ -26,8 +26,10 @@ class ConversationController extends Controller
                     ->orWhere('user_two_id', $userId);
             })
             ->latest('updated_at')
-            ->get()
-            ->map(function ($conversation) use ($userId) {
+            ->paginate($this->perPage($request, 10))
+            ->withQueryString();
+
+        $conversations->getCollection()->transform(function ($conversation) use ($userId) {
                 $other = (int) $conversation->user_one_id === $userId
                     ? $conversation->userTwo
                     : $conversation->userOne;
@@ -35,7 +37,7 @@ class ConversationController extends Controller
                 return $this->conversationPayload($conversation, $other);
             });
 
-        return response()->json(['data' => $conversations]);
+        return $this->paginatedResponse($conversations);
     }
 
     public function store(Request $request)
