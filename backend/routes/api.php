@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AdminReportController;
+use App\Http\Controllers\Api\AdminReviewController;
 use App\Http\Controllers\Api\CallSessionController;
 use App\Http\Controllers\Api\ChatController;
 use App\Http\Controllers\Api\ConversationController;
@@ -66,6 +67,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/admin/reports/{report}/review', [AdminReportController::class, 'review']);
     Route::put('/admin/reports/{report}/resolve', [AdminReportController::class, 'resolve']);
     Route::put('/admin/reports/{report}/reject', [AdminReportController::class, 'reject']);
+    Route::get('/admin/reviews',              [AdminReviewController::class, 'index']);
+    Route::get('/admin/reviews/{review}',     [AdminReviewController::class, 'show']);
+    Route::put('/admin/reviews/{review}/publish', [AdminReviewController::class, 'publish']);
+    Route::put('/admin/reviews/{review}/reject', [AdminReviewController::class, 'reject']);
     // API ROUTES FOR NOTIFICATIONS :
 
     Route::get('/notifications',          [NotificationController::class, 'index']);
