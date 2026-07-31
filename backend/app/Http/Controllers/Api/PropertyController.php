@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Booking;
 use App\Models\Property;
 use App\Models\Review;
+use App\Support\OwnerReliability;
 use App\Support\PropertyRating;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -60,7 +61,10 @@ class PropertyController extends Controller
             ->paginate($this->perPage($request, 12))
             ->withQueryString();
 
-        $paginator->getCollection()->transform(function ($property) {
+        $collection = $paginator->getCollection();
+        OwnerReliability::applyToCollection($collection);
+
+        $collection->transform(function ($property) {
             $property->is_favorite = Auth::check()
                 ? $property->favorites()->where('user_id', Auth::id())->exists()
                 : false;
@@ -93,6 +97,7 @@ class PropertyController extends Controller
             ->findOrFail($id);
 
         PropertyRating::apply($property);
+        OwnerReliability::apply($property);
         $property->setAttribute('review_eligible_bookings', $this->eligibleReviewBookings($property));
 
         return $property;

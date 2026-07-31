@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Favorite;
 use App\Models\Review;
+use App\Support\OwnerReliability;
 use App\Support\PropertyRating;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -52,6 +53,12 @@ class FavoriteController extends Controller
             ->latest()
             ->paginate($this->perPage($request, 12))
             ->withQueryString();
+
+        $properties = $favorites->getCollection()
+            ->pluck('property')
+            ->filter();
+
+        OwnerReliability::applyToCollection($properties);
 
         $favorites->getCollection()->transform(function ($favorite) {
             if ($favorite->property) {
