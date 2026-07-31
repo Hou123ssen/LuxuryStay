@@ -4,6 +4,7 @@ import {
   FiCalendar,
   FiCheck,
   FiClock,
+  FiFlag,
   FiMapPin,
   FiMessageCircle,
   FiX,
@@ -35,6 +36,8 @@ export default function BookingCard({
   onReject,
   onCancel,
   canCancel = false,
+  canReport = false,
+  onReport,
   onNavigate,
 }) {
   const property = booking.property || {};
@@ -161,6 +164,16 @@ export default function BookingCard({
                 className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-500/30 text-red-300 hover:bg-red-500/10 transition-colors text-xs disabled:opacity-50"
               >
                 {actionLoad === booking.id ? '...' : <><FiX size={13} /> Cancel booking</>}
+              </button>
+            )}
+
+            {canReport && (
+              <button
+                type="button"
+                onClick={() => onReport(booking)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gold/20 text-gold/65 hover:border-gold/45 hover:text-gold transition-colors text-xs"
+              >
+                <FiFlag size={13} /> Report issue
               </button>
             )}
 

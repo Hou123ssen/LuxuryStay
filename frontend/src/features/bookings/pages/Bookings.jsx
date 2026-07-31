@@ -9,6 +9,7 @@ import BookingCard from '../components/BookingCard';
 import CancelBookingModal from '../components/CancelBookingModal';
 import { useBookingsPagination } from '../hooks/useBookingsPagination';
 import { canCancelBooking } from '../utils/bookingCancellation';
+import ReportBookingModal from '../../reports/components/ReportBookingModal';
 
 const TABS = [
   { key: 'upcoming', label: 'Upcoming' },
@@ -34,6 +35,7 @@ export default function Bookings() {
   } = useBookingsPagination();
   const [actionLoad, setActionLoad] = useState(null);
   const [cancelTarget, setCancelTarget] = useState(null);
+  const [reportTarget, setReportTarget] = useState(null);
 
   const handleAccept = async (id) => {
     setActionLoad(id);
@@ -79,6 +81,15 @@ export default function Bookings() {
     } finally {
       setActionLoad(null);
     }
+  };
+
+  const canReportBooking = (booking) => {
+    const allowedStatuses = ['accepted', 'completed', 'cancelled'];
+    const propertyOwnerId = booking.property?.user_id;
+
+    return tab !== 'owner'
+      && allowedStatuses.includes(booking.status)
+      && Number(propertyOwnerId) !== Number(user?.id);
   };
 
   return (
@@ -154,6 +165,8 @@ export default function Bookings() {
                   onReject={handleReject}
                   onCancel={setCancelTarget}
                   canCancel={canCancelBooking(booking, user, tab === 'owner')}
+                  canReport={canReportBooking(booking)}
+                  onReport={setReportTarget}
                   onNavigate={navigate}
                 />
               </div>
@@ -172,6 +185,13 @@ export default function Bookings() {
           if (!actionLoad) setCancelTarget(null);
         }}
         onConfirm={handleCancel}
+      />
+
+      <ReportBookingModal
+        booking={reportTarget}
+        isOpen={!!reportTarget}
+        onClose={() => setReportTarget(null)}
+        onSubmitted={() => toast.success('Report submitted successfully.')}
       />
     </div>
   );

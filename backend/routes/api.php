@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\FavoriteController;
 use App\Http\Controllers\Api\ImageController;
 use App\Http\Controllers\Api\NavbarCountsController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\ReportController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\Api\PropertyController;
@@ -58,6 +59,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/messages/{conversationId}',  [ConversationController::class, 'messages']);
     Route::post('/messages',                  [ConversationController::class, 'sendMessage']);
+    Route::post('/reports',                   [ReportController::class, 'store']);
     // API ROUTES FOR NOTIFICATIONS :
 
     Route::get('/notifications',          [NotificationController::class, 'index']);
