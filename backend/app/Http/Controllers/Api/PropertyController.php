@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Booking;
 use App\Models\Property;
 use App\Models\Review;
+use App\Services\Bookings\BookingAvailabilityService;
 use App\Support\OwnerReliability;
 use App\Support\PropertyRating;
 use Carbon\Carbon;
@@ -103,36 +104,14 @@ class PropertyController extends Controller
         return $property;
     }
 
-    public function availability(Property $property)
+    public function availability(Property $property, BookingAvailabilityService $availability)
     {
-        $bookings = $property->bookings()
-            ->where('status', 'accepted')
-            ->orderBy('start_date')
-            ->get(['start_date', 'end_date']);
-
-        $unavailableDates = [];
-
-        $unavailableRanges = $bookings->map(function ($booking) use (&$unavailableDates) {
-            $start = Carbon::parse($booking->start_date)->startOfDay();
-            $end = Carbon::parse($booking->end_date)->startOfDay();
-
-            for ($date = $start->copy(); $date->lt($end); $date->addDay()) {
-                $unavailableDates[] = $date->toDateString();
-            }
-
-            return [
-                'start_date' => $start->toDateString(),
-                'end_date' => $end->toDateString(),
-            ];
-        })->values();
-
-        $unavailableDates = array_values(array_unique($unavailableDates));
-        sort($unavailableDates);
+        $payload = $availability->unavailableForProperty($property);
 
         return response()->json([
             'property_id' => $property->id,
-            'unavailable_ranges' => $unavailableRanges,
-            'unavailable_dates' => $unavailableDates,
+            'unavailable_ranges' => $payload['unavailable_ranges'],
+            'unavailable_dates' => $payload['unavailable_dates'],
         ]);
     }
 
