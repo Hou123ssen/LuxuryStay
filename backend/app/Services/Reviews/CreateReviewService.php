@@ -13,8 +13,10 @@ use Illuminate\Http\Exceptions\HttpResponseException;
 
 class CreateReviewService
 {
-    public function __construct(private readonly ReviewRiskService $risk)
-    {
+    public function __construct(
+        private readonly ReviewRiskService $risk,
+        private readonly ReviewModerationLogService $logs,
+    ) {
     }
 
     public function create(User $user, array $data, array $context = []): Review
@@ -83,6 +85,20 @@ class CreateReviewService
         $review->ip_hash = $risk['ip_hash'];
         $review->user_agent_hash = $risk['user_agent_hash'];
         $review->save();
+
+        $logMetadata = [
+            'new_status' => $review->status,
+            'risk_score' => $review->risk_score,
+            'risk_reasons' => $review->risk_reasons ?? [],
+        ];
+
+        $this->logs->created($review, $user, $logMetadata);
+
+        if ($review->status === Review::STATUS_PENDING_REVIEW) {
+            $this->logs->autoFlagged($review, $logMetadata);
+        } else {
+            $this->logs->autoPublished($review, $logMetadata);
+        }
 
         return $review->load('user');
     }

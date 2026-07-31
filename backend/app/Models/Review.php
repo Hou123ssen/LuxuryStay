@@ -76,6 +76,11 @@ class Review extends Model
         return $this->belongsTo(User::class, 'moderated_by');
     }
 
+    public function moderationLogs()
+    {
+        return $this->hasMany(ReviewModerationLog::class);
+    }
+
     public function scopePublished(Builder $query): Builder
     {
         return $query->where('status', self::STATUS_PUBLISHED);

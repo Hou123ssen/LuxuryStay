@@ -6,6 +6,7 @@ use App\Models\Booking;
 use App\Models\Favorite;
 use App\Models\Property;
 use App\Models\Review;
+use App\Models\ReviewModerationLog;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -64,6 +65,10 @@ class ReviewSystemTest extends TestCase
         $this->assertIsInt($review->risk_score);
         $this->assertNotSame('127.0.0.1', $review->ip_hash);
         $this->assertNotSame('Symfony', $review->user_agent_hash);
+        $this->assertSame([
+            ReviewModerationLog::ACTION_CREATED,
+            ReviewModerationLog::ACTION_AUTO_PUBLISHED,
+        ], $review->moderationLogs()->orderBy('id')->pluck('action')->all());
     }
 
     public function test_high_risk_review_becomes_pending_review_and_stays_private(): void
@@ -98,7 +103,8 @@ class ReviewSystemTest extends TestCase
             ->assertJsonMissingPath('data.risk_score')
             ->assertJsonMissingPath('data.risk_reasons')
             ->assertJsonMissingPath('data.ip_hash')
-            ->assertJsonMissingPath('data.user_agent_hash');
+            ->assertJsonMissingPath('data.user_agent_hash')
+            ->assertJsonMissingPath('data.moderation_logs');
 
         $review = Review::where('booking_id', $booking->id)->first();
         $this->assertSame(Review::STATUS_PENDING_REVIEW, $review->status);
@@ -107,6 +113,10 @@ class ReviewSystemTest extends TestCase
         $this->assertContains('DUPLICATE_CONTENT', $review->risk_reasons);
         $this->assertNotSame('203.0.113.8', $review->ip_hash);
         $this->assertNotSame('LuxurrStay Test Browser', $review->user_agent_hash);
+        $this->assertSame([
+            ReviewModerationLog::ACTION_CREATED,
+            ReviewModerationLog::ACTION_AUTO_FLAGGED,
+        ], $review->moderationLogs()->orderBy('id')->pluck('action')->all());
 
         $this
             ->actingAs($guestB, 'sanctum')
@@ -119,7 +129,62 @@ class ReviewSystemTest extends TestCase
             ->assertJsonMissingPath('reviews.0.risk_score')
             ->assertJsonMissingPath('reviews.0.risk_reasons')
             ->assertJsonMissingPath('reviews.0.ip_hash')
-            ->assertJsonMissingPath('reviews.0.user_agent_hash');
+            ->assertJsonMissingPath('reviews.0.user_agent_hash')
+            ->assertJsonMissingPath('reviews.0.moderation_logs');
+    }
+
+    public function test_audit_logs_store_safe_metadata_without_raw_request_details(): void
+    {
+        config(['reviews.risk.high_risk_threshold' => 70]);
+
+        $owner = User::factory()->create();
+        $guestA = User::factory()->create();
+        $guestB = User::factory()->create();
+        $property = $this->propertyFor($owner);
+        $this->reviewFor($guestA, $property, 5, 'Repeated luxury spa wording.');
+        $booking = $this->bookingFor($guestB, $property, [
+            'status' => 'accepted',
+            'end_date' => '2026-07-20',
+        ]);
+
+        $this
+            ->actingAs($guestB, 'sanctum')
+            ->withServerVariables([
+                'REMOTE_ADDR' => '203.0.113.44',
+                'HTTP_USER_AGENT' => 'Sensitive Browser Value',
+            ])
+            ->postJson('/api/reviews', [
+                'property_id' => $property->id,
+                'booking_id' => $booking->id,
+                'rating' => 5,
+                'comment' => 'Repeated luxury spa wording.',
+            ])
+            ->assertCreated();
+
+        $review = Review::where('booking_id', $booking->id)->first();
+        $logs = $review->moderationLogs()->orderBy('id')->get();
+
+        $this->assertSame(2, $logs->count());
+        $this->assertContains('DUPLICATE_CONTENT', $logs->last()->metadata['risk_reasons']);
+        $this->assertSame($review->risk_score, $logs->last()->metadata['risk_score']);
+
+        foreach ($logs as $log) {
+            $serialized = json_encode($log->metadata);
+            $this->assertStringNotContainsString('203.0.113.44', $serialized);
+            $this->assertStringNotContainsString('Sensitive Browser Value', $serialized);
+            $this->assertArrayNotHasKey('ip_hash', $log->metadata);
+            $this->assertArrayNotHasKey('user_agent_hash', $log->metadata);
+        }
+    }
+
+    public function test_ordinary_user_cannot_access_review_moderation_logs_through_public_api(): void
+    {
+        $user = User::factory()->create();
+
+        $this
+            ->actingAs($user, 'sanctum')
+            ->getJson('/api/review-moderation-logs')
+            ->assertNotFound();
     }
 
     public function test_one_star_alone_and_five_star_alone_are_not_fraud(): void
@@ -474,6 +539,8 @@ class ReviewSystemTest extends TestCase
             ->assertJsonPath('message', 'This stay has already been reviewed.');
 
         $this->assertSame(1, Review::where('booking_id', $booking->id)->count());
+        $review = Review::where('booking_id', $booking->id)->first();
+        $this->assertSame(2, $review->moderationLogs()->count());
     }
 
     public function test_review_creation_is_throttled_after_five_attempts_per_hour(): void
