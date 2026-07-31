@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\AdminReportController;
 use App\Http\Controllers\Api\CallSessionController;
 use App\Http\Controllers\Api\ChatController;
 use App\Http\Controllers\Api\ConversationController;
@@ -60,6 +61,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/messages/{conversationId}',  [ConversationController::class, 'messages']);
     Route::post('/messages',                  [ConversationController::class, 'sendMessage']);
     Route::post('/reports',                   [ReportController::class, 'store']);
+    Route::get('/admin/reports',              [AdminReportController::class, 'index']);
+    Route::get('/admin/reports/{report}',     [AdminReportController::class, 'show']);
+    Route::put('/admin/reports/{report}/review', [AdminReportController::class, 'review']);
+    Route::put('/admin/reports/{report}/resolve', [AdminReportController::class, 'resolve']);
+    Route::put('/admin/reports/{report}/reject', [AdminReportController::class, 'reject']);
     // API ROUTES FOR NOTIFICATIONS :
 
     Route::get('/notifications',          [NotificationController::class, 'index']);
