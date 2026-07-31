@@ -12,16 +12,35 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const savedToken = localStorage.getItem('token');
     const savedUser  = localStorage.getItem('user');
-    if (savedToken && savedUser) {
+    if (savedToken) {
+      setToken(savedToken);
+
       try {
-        setToken(savedToken);
-        setUser(JSON.parse(savedUser));
+        if (savedUser) setUser(JSON.parse(savedUser));
       } catch (err) {
         console.error('Failed to parse user data:', err);
-        localStorage.removeItem('token');
         localStorage.removeItem('user');
       }
+
+      authService.me()
+        .then((res) => {
+          const freshUser = res.data?.user;
+          if (freshUser) {
+            localStorage.setItem('user', JSON.stringify(freshUser));
+            setUser(freshUser);
+          }
+        })
+        .catch(() => {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          setToken(null);
+          setUser(null);
+        })
+        .finally(() => setLoading(false));
+
+      return;
     }
+
     setLoading(false);
   }, []);
 
