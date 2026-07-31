@@ -17,6 +17,7 @@ const STATUS_STYLES = {
   confirmed: 'bg-green-500/10 text-green-400 border-green-500/20',
   pending: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
   rejected: 'bg-red-500/10 text-red-400 border-red-500/20',
+  cancelled: 'bg-red-500/10 text-red-300 border-red-500/20',
   completed: 'bg-cream/10 text-cream/60 border-cream/10',
 };
 
@@ -32,6 +33,8 @@ export default function BookingCard({
   actionLoad = null,
   onAccept,
   onReject,
+  onCancel,
+  canCancel = false,
   onNavigate,
 }) {
   const property = booking.property || {};
@@ -90,6 +93,26 @@ export default function BookingCard({
               <span>{nightsCount} night{nightsCount > 1 ? 's' : ''}</span>
             </div>
           </div>
+
+          {booking.status === 'cancelled' && (
+            <div className="mt-4 rounded-xl border border-red-500/15 bg-red-500/5 px-4 py-3 text-xs text-cream/55">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                {booking.cancelled_at && (
+                  <span>
+                    Cancelled {format(new Date(booking.cancelled_at), 'MMM d, yyyy')}
+                  </span>
+                )}
+                {booking.cancellation_actor && (
+                  <span className="capitalize text-red-300/80">
+                    by {booking.cancellation_actor}
+                  </span>
+                )}
+              </div>
+              {booking.cancellation_reason && (
+                <p className="mt-2 leading-relaxed text-cream/45">{booking.cancellation_reason}</p>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex items-center justify-between mt-4 pt-4 border-t border-gold/8 flex-wrap gap-3">
@@ -128,6 +151,17 @@ export default function BookingCard({
                   {actionLoad === booking.id ? '...' : <><FiCheck size={13} /> Accept</>}
                 </button>
               </>
+            )}
+
+            {canCancel && (
+              <button
+                type="button"
+                onClick={() => onCancel(booking)}
+                disabled={actionLoad === booking.id}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-500/30 text-red-300 hover:bg-red-500/10 transition-colors text-xs disabled:opacity-50"
+              >
+                {actionLoad === booking.id ? '...' : <><FiX size={13} /> Cancel booking</>}
+              </button>
             )}
 
             <button

@@ -29,9 +29,13 @@ class NotificationController extends Controller
                 'property_id' => $decoded['property_id'] ?? null,
                 'property_title' => $decoded['property_title'] ?? $decoded['property'] ?? null,
                 'guest_name' => $decoded['guest_name'] ?? $decoded['booker_name'] ?? null,
+                'owner_name' => $decoded['owner_name'] ?? null,
                 'check_in' => $decoded['check_in'] ?? $decoded['start_date'] ?? null,
                 'check_out' => $decoded['check_out'] ?? $decoded['end_date'] ?? null,
                 'booker_id' => $decoded['booker_id'] ?? null,
+                'cancelled_by' => $decoded['cancelled_by'] ?? null,
+                'cancellation_reason' => $decoded['cancellation_reason'] ?? null,
+                'cancelled_at' => $decoded['cancelled_at'] ?? null,
             ];
         });
 

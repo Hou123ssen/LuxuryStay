@@ -39,6 +39,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // ✅ Accept & Reject
     Route::post('/bookings/{id}/accept',    [BookingController::class, 'accept']);
     Route::post('/bookings/{id}/reject',    [BookingController::class, 'reject']);
+    Route::post('/bookings/{id}/cancel',    [BookingController::class, 'cancel']);
 
     // ✅ حجوزات ملكيات المالك
     Route::get('/owner/bookings', [BookingController::class, 'ownerBookings']);

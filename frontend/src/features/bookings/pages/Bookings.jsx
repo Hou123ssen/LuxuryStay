@@ -3,9 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { FiCalendar } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import Pagination from '../../../shared/components/common/Pagination';
+import { useAuth } from '../../../app/providers/AuthContext';
 import { bookingService } from '../api/bookingApi';
 import BookingCard from '../components/BookingCard';
+import CancelBookingModal from '../components/CancelBookingModal';
 import { useBookingsPagination } from '../hooks/useBookingsPagination';
+import { canCancelBooking } from '../utils/bookingCancellation';
 
 const TABS = [
   { key: 'upcoming', label: 'Upcoming' },
@@ -15,6 +18,7 @@ const TABS = [
 
 export default function Bookings() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const {
     items: shown,
     setItems: setShown,
@@ -24,10 +28,12 @@ export default function Bookings() {
     page,
     bookingRefs,
     highlightedBookingId,
+    refresh,
     handleTabChange,
     goToPage,
   } = useBookingsPagination();
   const [actionLoad, setActionLoad] = useState(null);
+  const [cancelTarget, setCancelTarget] = useState(null);
 
   const handleAccept = async (id) => {
     setActionLoad(id);
@@ -54,6 +60,22 @@ export default function Bookings() {
       toast.success('Booking rejected');
     } catch (err) {
       toast.error(err.response?.data?.message || err.response?.data?.error || 'Failed to reject booking');
+    } finally {
+      setActionLoad(null);
+    }
+  };
+
+  const handleCancel = async (reason) => {
+    if (!cancelTarget) return;
+
+    setActionLoad(cancelTarget.id);
+    try {
+      await bookingService.cancel(cancelTarget.id, { reason });
+      toast.success('Booking cancelled');
+      setCancelTarget(null);
+      await refresh();
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.response?.data?.error || 'Failed to cancel booking');
     } finally {
       setActionLoad(null);
     }
@@ -130,6 +152,8 @@ export default function Bookings() {
                   actionLoad={actionLoad}
                   onAccept={handleAccept}
                   onReject={handleReject}
+                  onCancel={setCancelTarget}
+                  canCancel={canCancelBooking(booking, user, tab === 'owner')}
                   onNavigate={navigate}
                 />
               </div>
@@ -139,6 +163,16 @@ export default function Bookings() {
           <Pagination meta={meta} currentPage={page} onPageChange={goToPage} />
         </>
       )}
+
+      <CancelBookingModal
+        booking={cancelTarget}
+        isOpen={!!cancelTarget}
+        loading={actionLoad === cancelTarget?.id}
+        onClose={() => {
+          if (!actionLoad) setCancelTarget(null);
+        }}
+        onConfirm={handleCancel}
+      />
     </div>
   );
 }
