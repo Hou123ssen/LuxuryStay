@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Favorite;
+use App\Models\Review;
 use App\Support\PropertyRating;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -39,6 +40,11 @@ class FavoriteController extends Controller
                         }], 'rating')
                         ->withCount(['reviews as reviews_count' => function ($query) {
                             $query->published();
+                        }])
+                        ->withCount(['reviews as pending_high_risk_reviews_count' => function ($query) {
+                            $query
+                                ->where('status', Review::STATUS_PENDING_REVIEW)
+                                ->where('risk_score', '>=', config('reviews.risk.high_risk_threshold'));
                         }]);
                 },
             ])

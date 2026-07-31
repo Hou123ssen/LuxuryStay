@@ -157,6 +157,8 @@ export default function PropertyCard({
             count={property.reviews_count}
             label={property.rating_label}
             ratingState={property.rating_state}
+            trustBadge={property.trust_badge}
+            trustLabel={property.trust_label}
             className="shrink-0 mt-1"
           />
         </div>

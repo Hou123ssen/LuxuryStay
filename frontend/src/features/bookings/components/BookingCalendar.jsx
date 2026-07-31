@@ -124,6 +124,8 @@ export default function BookingCalendar({ property }) {
           count={property.reviews_count}
           label={property.rating_label}
           ratingState={property.rating_state}
+          trustBadge={property.trust_badge}
+          trustLabel={property.trust_label}
           showEmpty={false}
         />
       </div>

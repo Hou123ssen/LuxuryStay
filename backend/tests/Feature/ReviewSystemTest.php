@@ -784,6 +784,175 @@ class ReviewSystemTest extends TestCase
             ->assertJsonPath('reviews_count', 5);
     }
 
+    public function test_nine_published_five_star_reviews_do_not_unlock_trust_badge(): void
+    {
+        $owner = User::factory()->create();
+        $property = $this->propertyFor($owner);
+        $this->reviewsFor($property, array_fill(0, 9, 5));
+
+        $this
+            ->actingAs(User::factory()->create(), 'sanctum')
+            ->getJson('/api/properties/'.$property->id)
+            ->assertOk()
+            ->assertJsonPath('average_rating', 5)
+            ->assertJsonPath('reviews_count', 9)
+            ->assertJsonPath('rating_state', 'established')
+            ->assertJsonPath('trust_badge', null)
+            ->assertJsonPath('trust_label', null);
+    }
+
+    public function test_ten_reviews_average_four_point_five_unlocks_trusted_badge_on_index_detail_and_favorites(): void
+    {
+        $owner = User::factory()->create();
+        $guest = User::factory()->create();
+        $property = $this->propertyFor($owner);
+        $this->reviewsFor($property, array_merge(array_fill(0, 5, 5), array_fill(0, 5, 4)));
+
+        Favorite::create([
+            'user_id' => $guest->id,
+            'property_id' => $property->id,
+        ]);
+
+        $this
+            ->actingAs($guest, 'sanctum')
+            ->getJson('/api/properties')
+            ->assertOk()
+            ->assertJsonPath('data.0.average_rating', 4.5)
+            ->assertJsonPath('data.0.reviews_count', 10)
+            ->assertJsonPath('data.0.trust_badge', 'trusted')
+            ->assertJsonPath('data.0.trust_label', 'Trusted');
+
+        $this
+            ->actingAs($guest, 'sanctum')
+            ->getJson('/api/properties/'.$property->id)
+            ->assertOk()
+            ->assertJsonPath('average_rating', 4.5)
+            ->assertJsonPath('reviews_count', 10)
+            ->assertJsonPath('trust_badge', 'trusted')
+            ->assertJsonPath('trust_label', 'Trusted');
+
+        $this
+            ->actingAs($guest, 'sanctum')
+            ->getJson('/api/favorites')
+            ->assertOk()
+            ->assertJsonPath('data.0.property.average_rating', 4.5)
+            ->assertJsonPath('data.0.property.reviews_count', 10)
+            ->assertJsonPath('data.0.property.trust_badge', 'trusted')
+            ->assertJsonPath('data.0.property.trust_label', 'Trusted');
+    }
+
+    public function test_ten_reviews_average_below_four_point_five_get_no_trust_badge(): void
+    {
+        $owner = User::factory()->create();
+        $property = $this->propertyFor($owner);
+        $this->reviewsFor($property, array_merge(array_fill(0, 4, 5), array_fill(0, 6, 4)));
+
+        $this
+            ->actingAs(User::factory()->create(), 'sanctum')
+            ->getJson('/api/properties/'.$property->id)
+            ->assertOk()
+            ->assertJsonPath('average_rating', 4.4)
+            ->assertJsonPath('reviews_count', 10)
+            ->assertJsonPath('trust_badge', null)
+            ->assertJsonPath('trust_label', null);
+    }
+
+    public function test_twenty_reviews_average_four_point_seven_unlocks_highly_trusted_badge(): void
+    {
+        $owner = User::factory()->create();
+        $property = $this->propertyFor($owner);
+        $this->reviewsFor($property, array_merge(array_fill(0, 14, 5), array_fill(0, 6, 4)));
+
+        $this
+            ->actingAs(User::factory()->create(), 'sanctum')
+            ->getJson('/api/properties/'.$property->id)
+            ->assertOk()
+            ->assertJsonPath('average_rating', 4.7)
+            ->assertJsonPath('reviews_count', 20)
+            ->assertJsonPath('trust_badge', 'highly_trusted')
+            ->assertJsonPath('trust_label', 'Highly trusted');
+    }
+
+    public function test_fifty_reviews_average_four_point_eight_unlocks_top_rated_badge(): void
+    {
+        $owner = User::factory()->create();
+        $property = $this->propertyFor($owner);
+        $this->reviewsFor($property, array_merge(array_fill(0, 40, 5), array_fill(0, 10, 4)));
+
+        $this
+            ->actingAs(User::factory()->create(), 'sanctum')
+            ->getJson('/api/properties/'.$property->id)
+            ->assertOk()
+            ->assertJsonPath('average_rating', 4.8)
+            ->assertJsonPath('reviews_count', 50)
+            ->assertJsonPath('trust_badge', 'top_rated')
+            ->assertJsonPath('trust_label', 'Top rated');
+    }
+
+    public function test_pending_and_rejected_reviews_do_not_help_unlock_trust_badges(): void
+    {
+        $owner = User::factory()->create();
+        $property = $this->propertyFor($owner);
+        $this->reviewsFor($property, array_fill(0, 9, 5));
+        $this->moderatedReviewFor(User::factory()->create(), $property, 5, Review::STATUS_PENDING_REVIEW);
+        $this->moderatedReviewFor(User::factory()->create(), $property, 5, Review::STATUS_REJECTED);
+
+        $this
+            ->actingAs(User::factory()->create(), 'sanctum')
+            ->getJson('/api/properties/'.$property->id)
+            ->assertOk()
+            ->assertJsonPath('average_rating', 5)
+            ->assertJsonPath('reviews_count', 9)
+            ->assertJsonPath('trust_badge', null)
+            ->assertJsonPath('trust_label', null);
+    }
+
+    public function test_unresolved_high_risk_pending_review_blocks_trust_badge(): void
+    {
+        $owner = User::factory()->create();
+        $property = $this->propertyFor($owner);
+        $this->reviewsFor($property, array_fill(0, 10, 5));
+        $this->moderatedReviewFor(
+            User::factory()->create(),
+            $property,
+            5,
+            Review::STATUS_PENDING_REVIEW,
+            config('reviews.risk.high_risk_threshold')
+        );
+
+        $this
+            ->actingAs(User::factory()->create(), 'sanctum')
+            ->getJson('/api/properties/'.$property->id)
+            ->assertOk()
+            ->assertJsonPath('average_rating', 5)
+            ->assertJsonPath('reviews_count', 10)
+            ->assertJsonPath('trust_badge', null)
+            ->assertJsonPath('trust_label', null);
+    }
+
+    public function test_rejected_high_risk_review_does_not_count_or_block_trust_badge(): void
+    {
+        $owner = User::factory()->create();
+        $property = $this->propertyFor($owner);
+        $this->reviewsFor($property, array_fill(0, 10, 5));
+        $this->moderatedReviewFor(
+            User::factory()->create(),
+            $property,
+            1,
+            Review::STATUS_REJECTED,
+            config('reviews.risk.high_risk_threshold')
+        );
+
+        $this
+            ->actingAs(User::factory()->create(), 'sanctum')
+            ->getJson('/api/properties/'.$property->id)
+            ->assertOk()
+            ->assertJsonPath('average_rating', 5)
+            ->assertJsonPath('reviews_count', 10)
+            ->assertJsonPath('trust_badge', 'trusted')
+            ->assertJsonPath('trust_label', 'Trusted');
+    }
+
     public function test_four_published_reviews_and_one_pending_review_stay_forming(): void
     {
         $owner = User::factory()->create();
@@ -1014,7 +1183,20 @@ class ReviewSystemTest extends TestCase
         ]);
     }
 
-    private function moderatedReviewFor(User $user, Property $property, int $rating, string $status): Review
+    private function reviewsFor(Property $property, array $ratings): void
+    {
+        foreach ($ratings as $index => $rating) {
+            $this->reviewFor(User::factory()->create(), $property, $rating, 'Trust badge fixture '.$index);
+        }
+    }
+
+    private function moderatedReviewFor(
+        User $user,
+        Property $property,
+        int $rating,
+        string $status,
+        int $riskScore = 0
+    ): Review
     {
         $booking = $this->bookingFor($user, $property);
         $review = new Review([
@@ -1027,6 +1209,7 @@ class ReviewSystemTest extends TestCase
 
         $review->status = $status;
         $review->published_at = $status === Review::STATUS_PUBLISHED ? now() : null;
+        $review->risk_score = $riskScore;
         $review->save();
 
         return $review;

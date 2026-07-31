@@ -6,6 +6,8 @@ export default function RatingDisplay({
   count = 0,
   label = null,
   ratingState = null,
+  trustBadge = null,
+  trustLabel = null,
   size = 'sm',
   showEmpty = true,
   variant = 'compact',
@@ -71,10 +73,17 @@ export default function RatingDisplay({
 
   const roundedRating = Number(displayRating).toFixed(1);
   const ariaLabel = `Guest rating ${roundedRating} out of 5 based on ${reviewCount} ${stayLabel}`;
+  const badgeText = trustBadge ? trustLabel : null;
+  const badgeClass = isLarge
+    ? 'w-fit rounded-full border border-gold/25 bg-gold/8 px-2 py-0.5 text-[11px] text-gold/80'
+    : 'ml-1 rounded-full border border-gold/20 bg-gold/8 px-1.5 py-0.5 text-[10px] text-gold/75';
 
   if (variant === 'detail') {
     return (
-      <span className={`inline-flex flex-col gap-0.5 ${className}`} aria-label={ariaLabel}>
+      <span
+        className={`inline-flex flex-col gap-0.5 ${className}`}
+        aria-label={badgeText ? `${ariaLabel}. ${badgeText} property.` : ariaLabel}
+      >
         <span className={`inline-flex items-center gap-1 text-gold ${ratingTextSize}`}>
           <FiStar size={iconSize} fill="currentColor" />
           <span>{roundedRating}</span>
@@ -82,6 +91,7 @@ export default function RatingDisplay({
         <span className="text-xs text-cream/40">
           Based on {reviewCount} {stayLabel}
         </span>
+        {badgeText && <span className={badgeClass}>{badgeText}</span>}
       </span>
     );
   }
@@ -89,7 +99,7 @@ export default function RatingDisplay({
   return (
     <span
       className={`inline-flex items-center gap-1 text-gold ${textSize} ${className}`}
-      aria-label={ariaLabel}
+      aria-label={badgeText ? `${ariaLabel}. ${badgeText} property.` : ariaLabel}
     >
       <FiStar size={iconSize} fill="currentColor" />
       <span>{roundedRating}</span>
@@ -97,6 +107,7 @@ export default function RatingDisplay({
       <span className="text-cream/45 whitespace-nowrap">
         {reviewCount} {stayLabel}
       </span>
+      {badgeText && <span className={badgeClass}>{badgeText}</span>}
     </span>
   );
 }

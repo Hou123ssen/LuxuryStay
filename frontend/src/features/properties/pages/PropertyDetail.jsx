@@ -359,6 +359,8 @@ export default function PropertyDetail() {
                       count={property.reviews_count}
                       label={property.rating_label}
                       ratingState={property.rating_state}
+                      trustBadge={property.trust_badge}
+                      trustLabel={property.trust_label}
                       size="lg"
                       variant="detail"
                     />
