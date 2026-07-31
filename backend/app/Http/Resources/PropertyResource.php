@@ -9,6 +9,10 @@ class PropertyResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        return $this->resource->toArray();
+        $payload = $this->resource->toArray();
+
+        unset($payload['ranking_score'], $payload['public_rating']);
+
+        return $payload;
     }
 }

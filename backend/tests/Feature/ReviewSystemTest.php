@@ -606,8 +606,6 @@ class ReviewSystemTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.0.average_rating', 4.5)
             ->assertJsonPath('data.0.rating_state', 'forming')
-            ->assertJsonPath('data.0.ranking_score', 4.1)
-            ->assertJsonPath('data.0.public_rating', 4.1)
             ->assertJsonPath('data.0.rating_label', 'Rating forming · 2 verified stays')
             ->assertJsonPath('data.0.reviews_count', 2);
 
@@ -617,8 +615,6 @@ class ReviewSystemTest extends TestCase
             ->assertOk()
             ->assertJsonPath('average_rating', 4.5)
             ->assertJsonPath('rating_state', 'forming')
-            ->assertJsonPath('ranking_score', 4.1)
-            ->assertJsonPath('public_rating', 4.1)
             ->assertJsonPath('rating_label', 'Rating forming · 2 verified stays')
             ->assertJsonPath('reviews_count', 2);
 
@@ -628,10 +624,48 @@ class ReviewSystemTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.0.property.average_rating', 4.5)
             ->assertJsonPath('data.0.property.rating_state', 'forming')
-            ->assertJsonPath('data.0.property.ranking_score', 4.1)
-            ->assertJsonPath('data.0.property.public_rating', 4.1)
             ->assertJsonPath('data.0.property.rating_label', 'Rating forming · 2 verified stays')
             ->assertJsonPath('data.0.property.reviews_count', 2);
+    }
+
+    public function test_public_property_payloads_do_not_expose_internal_ranking_scores(): void
+    {
+        $owner = User::factory()->create();
+        $guest = User::factory()->create();
+        $property = $this->propertyFor($owner);
+
+        $this->reviewFor($guest, $property, 5);
+
+        Favorite::create([
+            'user_id' => $guest->id,
+            'property_id' => $property->id,
+        ]);
+
+        $index = $this
+            ->actingAs($guest, 'sanctum')
+            ->getJson('/api/properties')
+            ->assertOk()
+            ->assertJsonPath('data.0.average_rating', 5)
+            ->assertJsonPath('data.0.rating_state', 'forming');
+
+        $detail = $this
+            ->actingAs($guest, 'sanctum')
+            ->getJson('/api/properties/'.$property->id)
+            ->assertOk()
+            ->assertJsonPath('average_rating', 5)
+            ->assertJsonPath('rating_state', 'forming');
+
+        $favorites = $this
+            ->actingAs($guest, 'sanctum')
+            ->getJson('/api/favorites')
+            ->assertOk()
+            ->assertJsonPath('data.0.property.average_rating', 5)
+            ->assertJsonPath('data.0.property.rating_state', 'forming');
+
+        foreach ([$index->json('data.0'), $detail->json(), $favorites->json('data.0.property')] as $payload) {
+            $this->assertArrayNotHasKey('ranking_score', $payload);
+            $this->assertArrayNotHasKey('public_rating', $payload);
+        }
     }
 
     public function test_pending_and_rejected_reviews_do_not_affect_public_rating_payloads_or_review_list(): void
@@ -657,8 +691,7 @@ class ReviewSystemTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.0.average_rating', 5)
             ->assertJsonPath('data.0.reviews_count', 1)
-            ->assertJsonPath('data.0.rating_state', 'forming')
-            ->assertJsonPath('data.0.ranking_score', 4.2);
+            ->assertJsonPath('data.0.rating_state', 'forming');
 
         $detail = $this
             ->actingAs($guestA, 'sanctum')
@@ -666,8 +699,7 @@ class ReviewSystemTest extends TestCase
             ->assertOk()
             ->assertJsonPath('average_rating', 5)
             ->assertJsonPath('reviews_count', 1)
-            ->assertJsonPath('rating_state', 'forming')
-            ->assertJsonPath('ranking_score', 4.2);
+            ->assertJsonPath('rating_state', 'forming');
 
         $reviewIds = collect($detail->json('reviews'))->pluck('id')->all();
         $this->assertSame([$published->id], $reviewIds);
@@ -680,8 +712,7 @@ class ReviewSystemTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.0.property.average_rating', 5)
             ->assertJsonPath('data.0.property.reviews_count', 1)
-            ->assertJsonPath('data.0.property.rating_state', 'forming')
-            ->assertJsonPath('data.0.property.ranking_score', 4.2);
+            ->assertJsonPath('data.0.property.rating_state', 'forming');
     }
 
     public function test_property_with_no_reviews_returns_empty_rating_contract(): void
@@ -696,13 +727,11 @@ class ReviewSystemTest extends TestCase
             ->assertOk()
             ->assertJsonPath('average_rating', null)
             ->assertJsonPath('rating_state', 'new')
-            ->assertJsonPath('ranking_score', null)
-            ->assertJsonPath('public_rating', null)
             ->assertJsonPath('rating_label', 'New')
             ->assertJsonPath('reviews_count', 0);
     }
 
-    public function test_one_five_star_review_returns_public_average_and_internal_ranking_score(): void
+    public function test_one_five_star_review_returns_public_average_without_internal_ranking_score(): void
     {
         $owner = User::factory()->create();
         $guest = User::factory()->create();
@@ -716,13 +745,11 @@ class ReviewSystemTest extends TestCase
             ->assertOk()
             ->assertJsonPath('average_rating', 5)
             ->assertJsonPath('rating_state', 'forming')
-            ->assertJsonPath('ranking_score', 4.2)
-            ->assertJsonPath('public_rating', 4.2)
             ->assertJsonPath('rating_label', 'Rating forming · 1 verified stay')
             ->assertJsonPath('reviews_count', 1);
     }
 
-    public function test_two_five_star_reviews_keep_internal_ranking_score_below_five(): void
+    public function test_two_five_star_reviews_return_forming_state_without_internal_ranking_score(): void
     {
         $owner = User::factory()->create();
         $firstGuest = User::factory()->create();
@@ -738,8 +765,6 @@ class ReviewSystemTest extends TestCase
             ->assertOk()
             ->assertJsonPath('average_rating', 5)
             ->assertJsonPath('rating_state', 'forming')
-            ->assertJsonPath('ranking_score', 4.3)
-            ->assertJsonPath('public_rating', 4.3)
             ->assertJsonPath('rating_label', 'Rating forming · 2 verified stays')
             ->assertJsonPath('reviews_count', 2);
     }
@@ -759,7 +784,6 @@ class ReviewSystemTest extends TestCase
             ->assertOk()
             ->assertJsonPath('average_rating', 5)
             ->assertJsonPath('rating_state', 'forming')
-            ->assertJsonPath('ranking_score', 4.4)
             ->assertJsonPath('rating_label', 'Rating forming · 4 verified stays')
             ->assertJsonPath('reviews_count', 4);
     }
@@ -779,7 +803,6 @@ class ReviewSystemTest extends TestCase
             ->assertOk()
             ->assertJsonPath('average_rating', 4.2)
             ->assertJsonPath('rating_state', 'established')
-            ->assertJsonPath('ranking_score', 4.1)
             ->assertJsonPath('rating_label', null)
             ->assertJsonPath('reviews_count', 5);
     }
@@ -974,7 +997,7 @@ class ReviewSystemTest extends TestCase
             ->assertJsonPath('rating_label', 'Rating forming · 4 verified stays');
     }
 
-    public function test_many_strong_reviews_move_ranking_score_closer_to_raw_average(): void
+    public function test_many_strong_reviews_return_public_average_without_internal_ranking_score(): void
     {
         $owner = User::factory()->create();
         $property = $this->propertyFor($owner);
@@ -989,13 +1012,11 @@ class ReviewSystemTest extends TestCase
             ->assertOk()
             ->assertJsonPath('average_rating', 5)
             ->assertJsonPath('rating_state', 'established')
-            ->assertJsonPath('ranking_score', 4.8)
-            ->assertJsonPath('public_rating', 4.8)
             ->assertJsonPath('rating_label', null)
             ->assertJsonPath('reviews_count', 20);
     }
 
-    public function test_mixed_reviews_calculate_correct_ranking_score(): void
+    public function test_mixed_reviews_return_public_average_without_internal_ranking_score(): void
     {
         $owner = User::factory()->create();
         $property = $this->propertyFor($owner);
@@ -1010,8 +1031,6 @@ class ReviewSystemTest extends TestCase
             ->assertOk()
             ->assertJsonPath('average_rating', 3.7)
             ->assertJsonPath('rating_state', 'forming')
-            ->assertJsonPath('ranking_score', 3.9)
-            ->assertJsonPath('public_rating', 3.9)
             ->assertJsonPath('rating_label', 'Rating forming · 3 verified stays')
             ->assertJsonPath('reviews_count', 3);
     }
@@ -1035,13 +1054,9 @@ class ReviewSystemTest extends TestCase
             ->assertJsonPath('data.0.id', $manyStrongReviews->id)
             ->assertJsonPath('data.0.average_rating', 5)
             ->assertJsonPath('data.0.rating_state', 'established')
-            ->assertJsonPath('data.0.ranking_score', 4.7)
-            ->assertJsonPath('data.0.public_rating', 4.7)
             ->assertJsonPath('data.1.id', $onePerfectReview->id)
             ->assertJsonPath('data.1.average_rating', 5)
-            ->assertJsonPath('data.1.rating_state', 'forming')
-            ->assertJsonPath('data.1.ranking_score', 4.2)
-            ->assertJsonPath('data.1.public_rating', 4.2);
+            ->assertJsonPath('data.1.rating_state', 'forming');
     }
 
     public function test_property_detail_returns_only_current_guests_review_eligible_bookings(): void
@@ -1139,8 +1154,6 @@ class ReviewSystemTest extends TestCase
             ->assertJsonPath('meta.current_page', 2)
             ->assertJsonPath('data.0.average_rating', null)
             ->assertJsonPath('data.0.rating_state', 'new')
-            ->assertJsonPath('data.0.ranking_score', null)
-            ->assertJsonPath('data.0.public_rating', null)
             ->assertJsonPath('data.0.rating_label', 'New')
             ->assertJsonPath('data.0.reviews_count', 0);
     }
