@@ -4,6 +4,7 @@ import { useAuth } from '../../app/providers/AuthContext';
 import { FiMenu, FiX, FiHeart, FiMessageCircle, FiBell, FiUser, FiLogOut, FiCalendar, FiPlusCircle } from 'react-icons/fi'; // ← FiPlusCircle added
 
 import { FiShield } from 'react-icons/fi';
+import { FiStar } from 'react-icons/fi';
 import { navbarCountsService } from '../api/navbarCountsApi';
 import { NAVBAR_COUNTS_REFRESH_EVENT } from '../utils/navbarCountsEvents';
 
@@ -95,7 +96,10 @@ export default function Navbar() {
         { to: '/favorites',  label: 'Favorites',  icon: <FiHeart size={14} /> },
         { to: '/chat',       label: 'Messages',   icon: <FiMessageCircle size={14} />, badge: counts.unread_messages_count },
         ...(user?.role === 'admin'
-          ? [{ to: '/admin/reports', label: 'Reports', icon: <FiShield size={14} /> }]
+          ? [
+              { to: '/admin/reports', label: 'Reports', icon: <FiShield size={14} /> },
+              { to: '/admin/reviews', label: 'Reviews', icon: <FiStar size={14} /> },
+            ]
           : []),
       ]
     : [
