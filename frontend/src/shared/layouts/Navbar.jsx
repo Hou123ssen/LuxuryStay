@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../app/providers/AuthContext';
 import { FiMenu, FiX, FiHeart, FiMessageCircle, FiBell, FiUser, FiLogOut, FiCalendar, FiPlusCircle } from 'react-icons/fi'; // ← FiPlusCircle added
 
+import { FiShield } from 'react-icons/fi';
 import { navbarCountsService } from '../api/navbarCountsApi';
 import { NAVBAR_COUNTS_REFRESH_EVENT } from '../utils/navbarCountsEvents';
 
@@ -93,6 +94,9 @@ export default function Navbar() {
         { to: '/bookings',   label: 'My Stays',  icon: <FiCalendar size={14} /> },
         { to: '/favorites',  label: 'Favorites',  icon: <FiHeart size={14} /> },
         { to: '/chat',       label: 'Messages',   icon: <FiMessageCircle size={14} />, badge: counts.unread_messages_count },
+        ...(user?.role === 'admin'
+          ? [{ to: '/admin/reports', label: 'Reports', icon: <FiShield size={14} /> }]
+          : []),
       ]
     : [
         { to: '/properties', label: 'Explore' },

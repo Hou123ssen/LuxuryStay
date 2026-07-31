@@ -13,6 +13,7 @@ import Chat           from '../../features/chat/pages/Chat';
 import AudioCall      from '../../features/chat/pages/AudioCall';
 import Notifications  from '../../features/notifications/pages/Notifications';
 import Profile        from '../../features/profile/pages/Profile';
+import AdminReports   from '../../features/reports/pages/AdminReports';
 import AddProperty    from '../../features/properties/pages/AddProperty';
 import EditProperty   from '../../features/properties/pages/EditProperty';
 import NotFound       from '../../pages/NotFound';
@@ -51,6 +52,9 @@ export default function AppRoutes() {
       } />
       <Route path="/profile" element={
         <ProtectedRoute><Profile /></ProtectedRoute>
+      } />
+      <Route path="/admin/reports" element={
+        <ProtectedRoute roles={['admin']}><AdminReports /></ProtectedRoute>
       } />
 
       {/* 404 */}
