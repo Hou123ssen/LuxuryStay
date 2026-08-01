@@ -74,5 +74,5 @@ export const usageIntensity = (count, maxCount) => {
 
 export const mapMarkerRadius = (count, maxCount) => {
   const intensity = usageIntensity(count, maxCount);
-  return 5 + intensity * 12;
+  return 4 + intensity * 7;
 };

@@ -9,9 +9,16 @@ import {
   mapMarkerRadius,
   usageIntensity,
 } from '../utils/adminGeographyFormatters';
+import AdminMapLegend from './AdminMapLegend';
 
 const MAP_WIDTH = 1000;
-const MAP_HEIGHT = 520;
+const MAP_HEIGHT = 500;
+const X_PADDING = 38;
+const Y_PADDING = 30;
+const PROJECTED_WIDTH = MAP_WIDTH - X_PADDING * 2;
+const PROJECTED_HEIGHT = MAP_HEIGHT - Y_PADDING * 2;
+const MIN_LATITUDE = -58;
+const MAX_LATITUDE = 82;
 const WORLD_GEOJSON = feature(worldCountries, worldCountries.objects.countries);
 
 export default function AdminWorldUsageMap({
@@ -90,20 +97,12 @@ export default function AdminWorldUsageMap({
               </radialGradient>
             </defs>
             <rect width={MAP_WIDTH} height={MAP_HEIGHT} fill="url(#admin-map-ocean)" />
-            <g opacity="0.11" stroke="#f5ead2" strokeWidth="0.5">
-              {Array.from({ length: 7 }).map((_, index) => (
-                <line key={`lat-${index}`} x1="0" x2={MAP_WIDTH} y1={70 + index * 62} y2={70 + index * 62} />
-              ))}
-              {Array.from({ length: 11 }).map((_, index) => (
-                <line key={`lng-${index}`} x1={80 + index * 84} x2={80 + index * 84} y1="0" y2={MAP_HEIGHT} />
-              ))}
-            </g>
 
             <g>
               {mapCountries.map((geo) => {
                 const country = countryByNumericCode.get(geo.id);
                 const hasUsage = Boolean(country);
-                const opacity = hasUsage ? 0.26 + usageIntensity(country.count, maxCount) * 0.54 : 0.12;
+                const opacity = hasUsage ? 0.34 + usageIntensity(country.count, maxCount) * 0.48 : 0.18;
 
                 return (
                   <path
@@ -116,12 +115,12 @@ export default function AdminWorldUsageMap({
                     onFocus={() => hasUsage && setActiveCountry(country)}
                     onMouseLeave={() => setActiveCountry(null)}
                     onBlur={() => setActiveCountry(null)}
-                    fill={hasUsage ? '#d4af37' : '#f5ead2'}
+                    fill={hasUsage ? '#d4af37' : '#2c2a25'}
                     fillOpacity={opacity}
-                    stroke={hasUsage ? '#d4af37' : '#f5ead2'}
-                    strokeOpacity={hasUsage ? 0.42 : 0.12}
-                    strokeWidth={hasUsage ? 1.1 : 0.55}
-                    className="outline-none transition-colors focus-visible:stroke-[2]"
+                    stroke={hasUsage ? '#f3c95a' : '#f5ead2'}
+                    strokeOpacity={hasUsage ? 0.5 : 0.16}
+                    strokeWidth={hasUsage ? 0.9 : 0.45}
+                    className="outline-none transition-colors focus-visible:stroke-[1.8]"
                   />
                 );
               })}
@@ -146,17 +145,17 @@ export default function AdminWorldUsageMap({
                     <circle
                       cx={x}
                       cy={y}
-                      r={country.radius * 2.1}
+                      r={country.radius * 1.8}
                       fill="#d4af37"
-                      fillOpacity="0.14"
+                      fillOpacity="0.12"
                       stroke="#d4af37"
-                      strokeOpacity="0.38"
-                      strokeWidth="1.4"
+                      strokeOpacity="0.42"
+                      strokeWidth="1.2"
                     />
                     <circle
                       cx={x}
                       cy={y}
-                      r={Math.max(4, country.radius * 0.65)}
+                      r={Math.max(3.2, country.radius * 0.58)}
                       fill="#f3c95a"
                       fillOpacity="0.9"
                       stroke="#070706"
@@ -185,6 +184,10 @@ export default function AdminWorldUsageMap({
             </div>
           )}
         </div>
+      </div>
+
+      <div className="mt-4">
+        <AdminMapLegend />
       </div>
     </div>
   );
@@ -215,21 +218,51 @@ function geometryToPath(geometry) {
 
 function polygonToPath(polygon) {
   return polygon
-    .map((ring) => {
-      const points = ring.map(project);
-      if (points.length === 0) return '';
-
-      const [firstX, firstY] = points[0];
-      const rest = points.slice(1).map(([x, y]) => `L${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
-
-      return `M${firstX.toFixed(1)} ${firstY.toFixed(1)} ${rest} Z`;
-    })
+    .flatMap(splitWrappedRing)
+    .map(ringToPath)
     .join(' ');
 }
 
+function splitWrappedRing(ring) {
+  const segments = [];
+  let current = [];
+
+  ring.forEach((point, index) => {
+    const previous = ring[index - 1];
+
+    if (previous && Math.abs(point[0] - previous[0]) > 180) {
+      if (current.length > 1) {
+        segments.push(current);
+      }
+
+      current = [point];
+      return;
+    }
+
+    current.push(point);
+  });
+
+  if (current.length > 1) {
+    segments.push(current);
+  }
+
+  return segments;
+}
+
+function ringToPath(ring) {
+  const points = ring.map(project);
+  if (points.length === 0) return '';
+
+  const [firstX, firstY] = points[0];
+  const rest = points.slice(1).map(([x, y]) => `L${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
+
+  return `M${firstX.toFixed(1)} ${firstY.toFixed(1)} ${rest} Z`;
+}
+
 function project([longitude, latitude]) {
-  const x = ((longitude + 180) / 360) * MAP_WIDTH;
-  const y = ((84 - latitude) / 168) * MAP_HEIGHT;
+  const clampedLatitude = Math.max(MIN_LATITUDE, Math.min(MAX_LATITUDE, latitude));
+  const x = X_PADDING + ((longitude + 180) / 360) * PROJECTED_WIDTH;
+  const y = Y_PADDING + ((MAX_LATITUDE - clampedLatitude) / (MAX_LATITUDE - MIN_LATITUDE)) * PROJECTED_HEIGHT;
 
   return [x, y];
 }
