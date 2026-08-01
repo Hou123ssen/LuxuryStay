@@ -40,6 +40,8 @@ class AnalyticsEventService
                     'country_code' => $country['country_code'],
                     'country_name' => $country['country_name'],
                     'country_source' => $country['country_source'],
+                    'region_name' => $country['region_name'],
+                    'city_name' => $country['city_name'],
                     'ip_hash' => $this->hashService->hash($request->ip()),
                     'user_agent_hash' => $this->hashService->hash($request->userAgent()),
                     'metadata' => $this->safeMetadata($metadata),
@@ -69,6 +71,14 @@ class AnalyticsEventService
             if (Schema::hasColumn('users', 'registered_country_name') && $user->registered_country_name === null) {
                 $updates['registered_country_name'] = $country['country_name'];
             }
+
+            if (Schema::hasColumn('users', 'registered_region_name') && $user->registered_region_name === null) {
+                $updates['registered_region_name'] = $country['region_name'];
+            }
+
+            if (Schema::hasColumn('users', 'registered_city_name') && $user->registered_city_name === null) {
+                $updates['registered_city_name'] = $country['city_name'];
+            }
         }
 
         if (Schema::hasColumn('users', 'last_seen_country_code')) {
@@ -77,6 +87,14 @@ class AnalyticsEventService
 
         if (Schema::hasColumn('users', 'last_seen_country_name')) {
             $updates['last_seen_country_name'] = $country['country_name'];
+        }
+
+        if (Schema::hasColumn('users', 'last_seen_region_name')) {
+            $updates['last_seen_region_name'] = $country['region_name'];
+        }
+
+        if (Schema::hasColumn('users', 'last_seen_city_name')) {
+            $updates['last_seen_city_name'] = $country['city_name'];
         }
 
         if (Schema::hasColumn('users', 'last_seen_at')) {

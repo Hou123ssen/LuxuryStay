@@ -40,6 +40,11 @@ class AdminGeographyAnalyticsTest extends TestCase
                     'usage_events_by_country',
                     'login_events_by_country',
                     'registration_events_by_country',
+                    'users_by_registered_city',
+                    'users_by_last_seen_city',
+                    'usage_events_by_city',
+                    'login_events_by_city',
+                    'registration_events_by_city',
                     'recent_country_activity',
                 ],
             ]);
@@ -49,6 +54,8 @@ class AdminGeographyAnalyticsTest extends TestCase
     {
         $this
             ->withHeader('X-LuxurrStay-Test-Country', 'MA')
+            ->withHeader('X-LuxurrStay-Test-Region', 'Casablanca-Settat')
+            ->withHeader('X-LuxurrStay-Test-City', 'Casablanca')
             ->postJson('/api/register', $this->registrationPayload('country.register@gmail.com'))
             ->assertCreated()
             ->assertJsonPath('user.email', 'country.register@gmail.com')
@@ -58,8 +65,12 @@ class AdminGeographyAnalyticsTest extends TestCase
 
         $this->assertSame('MA', $user->registered_country_code);
         $this->assertSame('Morocco', $user->registered_country_name);
+        $this->assertSame('Casablanca-Settat', $user->registered_region_name);
+        $this->assertSame('Casablanca', $user->registered_city_name);
         $this->assertSame('MA', $user->last_seen_country_code);
         $this->assertSame('Morocco', $user->last_seen_country_name);
+        $this->assertSame('Casablanca-Settat', $user->last_seen_region_name);
+        $this->assertSame('Casablanca', $user->last_seen_city_name);
         $this->assertNotNull($user->last_seen_at);
 
         $this->assertDatabaseHas('analytics_events', [
@@ -68,6 +79,8 @@ class AdminGeographyAnalyticsTest extends TestCase
             'country_code' => 'MA',
             'country_name' => 'Morocco',
             'country_source' => 'X-LuxurrStay-Test-Country',
+            'region_name' => 'Casablanca-Settat',
+            'city_name' => 'Casablanca',
         ]);
     }
 
@@ -80,6 +93,8 @@ class AdminGeographyAnalyticsTest extends TestCase
 
         $this
             ->withHeader('X-LuxurrStay-Test-Country', 'FR')
+            ->withHeader('X-LuxurrStay-Test-Region', 'Ile-de-France')
+            ->withHeader('X-LuxurrStay-Test-City', 'Paris')
             ->postJson('/api/login', [
                 'email' => 'country.login@example.com',
                 'password' => 'password123',
@@ -91,6 +106,8 @@ class AdminGeographyAnalyticsTest extends TestCase
 
         $this->assertSame('FR', $user->last_seen_country_code);
         $this->assertSame('France', $user->last_seen_country_name);
+        $this->assertSame('Ile-de-France', $user->last_seen_region_name);
+        $this->assertSame('Paris', $user->last_seen_city_name);
         $this->assertNotNull($user->last_seen_at);
 
         $this->assertDatabaseHas('analytics_events', [
@@ -99,13 +116,17 @@ class AdminGeographyAnalyticsTest extends TestCase
             'country_code' => 'FR',
             'country_name' => 'France',
             'country_source' => 'X-LuxurrStay-Test-Country',
+            'region_name' => 'Ile-de-France',
+            'city_name' => 'Paris',
         ]);
     }
 
-    public function test_invalid_country_header_becomes_unknown_safely(): void
+    public function test_invalid_country_city_and_region_headers_become_unknown_safely(): void
     {
         $this
             ->withHeader('X-LuxurrStay-Test-Country', 'INVALID')
+            ->withHeader('X-LuxurrStay-Test-Region', " \n\t ")
+            ->withHeader('X-LuxurrStay-Test-City', " \r ")
             ->postJson('/api/register', $this->registrationPayload('unknown.country@gmail.com'))
             ->assertCreated();
 
@@ -113,21 +134,27 @@ class AdminGeographyAnalyticsTest extends TestCase
 
         $this->assertNull($user->registered_country_code);
         $this->assertSame('Unknown', $user->registered_country_name);
+        $this->assertSame('Unknown', $user->registered_region_name);
+        $this->assertSame('Unknown', $user->registered_city_name);
         $this->assertDatabaseHas('analytics_events', [
             'user_id' => $user->id,
             'event_type' => AnalyticsEvent::TYPE_USER_REGISTERED,
             'country_code' => null,
             'country_name' => 'Unknown',
             'country_source' => null,
+            'region_name' => 'Unknown',
+            'city_name' => 'Unknown',
         ]);
     }
 
-    public function test_production_environment_does_not_trust_local_testing_country_header(): void
+    public function test_production_environment_does_not_trust_local_testing_geography_headers(): void
     {
         config(['app.env' => 'production']);
 
         $this
             ->withHeader('X-LuxurrStay-Test-Country', 'MA')
+            ->withHeader('X-LuxurrStay-Test-Region', 'Casablanca-Settat')
+            ->withHeader('X-LuxurrStay-Test-City', 'Casablanca')
             ->postJson('/api/register', $this->registrationPayload('production.country@gmail.com'))
             ->assertCreated();
 
@@ -135,17 +162,19 @@ class AdminGeographyAnalyticsTest extends TestCase
 
         $this->assertNull($user->registered_country_code);
         $this->assertSame('Unknown', $user->registered_country_name);
+        $this->assertSame('Unknown', $user->registered_region_name);
+        $this->assertSame('Unknown', $user->registered_city_name);
     }
 
     public function test_admin_geography_groups_users_and_events_by_country(): void
     {
         $admin = $this->admin();
-        $moroccoUser = $this->userWithCountries('MA', 'Morocco', 'FR', 'France');
-        $franceUser = $this->userWithCountries('FR', 'France', 'FR', 'France');
+        $moroccoUser = $this->userWithGeography('MA', 'Morocco', 'Casablanca-Settat', 'Casablanca', 'FR', 'France', 'Ile-de-France', 'Paris');
+        $franceUser = $this->userWithGeography('FR', 'France', 'Ile-de-France', 'Paris', 'FR', 'France', 'Ile-de-France', 'Paris');
 
-        $this->eventFor($moroccoUser, AnalyticsEvent::TYPE_USER_REGISTERED, 'MA', 'Morocco');
-        $this->eventFor($moroccoUser, AnalyticsEvent::TYPE_USER_LOGGED_IN, 'FR', 'France');
-        $this->eventFor($franceUser, AnalyticsEvent::TYPE_USER_REGISTERED, 'FR', 'France');
+        $this->eventFor($moroccoUser, AnalyticsEvent::TYPE_USER_REGISTERED, 'MA', 'Morocco', null, 'Casablanca-Settat', 'Casablanca');
+        $this->eventFor($moroccoUser, AnalyticsEvent::TYPE_USER_LOGGED_IN, 'FR', 'France', null, 'Ile-de-France', 'Paris');
+        $this->eventFor($franceUser, AnalyticsEvent::TYPE_USER_REGISTERED, 'FR', 'France', null, 'Ile-de-France', 'Paris');
 
         $response = $this
             ->actingAs($admin, 'sanctum')
@@ -153,6 +182,8 @@ class AdminGeographyAnalyticsTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.summary.known_registered_country_users_count', 2)
             ->assertJsonPath('data.summary.known_last_seen_country_users_count', 2)
+            ->assertJsonPath('data.summary.known_registered_city_users_count', 2)
+            ->assertJsonPath('data.summary.known_last_seen_city_users_count', 2)
             ->assertJsonPath('data.summary.usage_events_count', 3);
 
         $registered = collect($response->json('data.users_by_registered_country'))->keyBy('country_code');
@@ -160,6 +191,11 @@ class AdminGeographyAnalyticsTest extends TestCase
         $usageEvents = collect($response->json('data.usage_events_by_country'))->keyBy('country_code');
         $loginEvents = collect($response->json('data.login_events_by_country'))->keyBy('country_code');
         $registrationEvents = collect($response->json('data.registration_events_by_country'))->keyBy('country_code');
+        $registeredCities = collect($response->json('data.users_by_registered_city'))->keyBy('city_name');
+        $lastSeenCities = collect($response->json('data.users_by_last_seen_city'))->keyBy('city_name');
+        $usageEventCities = collect($response->json('data.usage_events_by_city'))->keyBy('city_name');
+        $loginEventCities = collect($response->json('data.login_events_by_city'))->keyBy('city_name');
+        $registrationEventCities = collect($response->json('data.registration_events_by_city'))->keyBy('city_name');
 
         $this->assertSame(1, $registered['MA']['count']);
         $this->assertSame(1, $registered['FR']['count']);
@@ -169,6 +205,19 @@ class AdminGeographyAnalyticsTest extends TestCase
         $this->assertSame(1, $loginEvents['FR']['count']);
         $this->assertSame(1, $registrationEvents['MA']['count']);
         $this->assertSame(1, $registrationEvents['FR']['count']);
+        $this->assertSame(1, $registeredCities['Casablanca']['count']);
+        $this->assertSame(1, $registeredCities['Paris']['count']);
+        $this->assertSame(2, $lastSeenCities['Paris']['count']);
+        $this->assertSame(2, $usageEventCities['Paris']['count']);
+        $this->assertSame(1, $usageEventCities['Casablanca']['count']);
+        $this->assertSame(1, $loginEventCities['Paris']['count']);
+        $this->assertSame(1, $registrationEventCities['Casablanca']['count']);
+        $this->assertSame(1, $registrationEventCities['Paris']['count']);
+
+        $activity = $response->json('data.recent_country_activity.0');
+
+        $this->assertArrayHasKey('city_name', $activity);
+        $this->assertArrayHasKey('region_name', $activity);
     }
 
     public function test_days_filter_limits_event_counts(): void
@@ -176,40 +225,45 @@ class AdminGeographyAnalyticsTest extends TestCase
         $admin = $this->admin();
         $user = User::factory()->create();
 
-        $this->eventFor($user, AnalyticsEvent::TYPE_USER_LOGGED_IN, 'MA', 'Morocco', now()->subDays(3));
-        $this->eventFor($user, AnalyticsEvent::TYPE_USER_LOGGED_IN, 'FR', 'France', now()->subDays(20));
-        $this->eventFor($user, AnalyticsEvent::TYPE_USER_LOGGED_IN, 'US', 'United States', now()->subDays(80));
-        $this->eventFor($user, AnalyticsEvent::TYPE_USER_LOGGED_IN, 'CA', 'Canada', now()->subDays(120));
+        $this->eventFor($user, AnalyticsEvent::TYPE_USER_LOGGED_IN, 'MA', 'Morocco', now()->subDays(3), 'Casablanca-Settat', 'Casablanca');
+        $this->eventFor($user, AnalyticsEvent::TYPE_USER_LOGGED_IN, 'FR', 'France', now()->subDays(20), 'Ile-de-France', 'Paris');
+        $this->eventFor($user, AnalyticsEvent::TYPE_USER_LOGGED_IN, 'US', 'United States', now()->subDays(80), 'New York', 'New York');
+        $this->eventFor($user, AnalyticsEvent::TYPE_USER_LOGGED_IN, 'CA', 'Canada', now()->subDays(120), 'Ontario', 'Toronto');
 
         $this
             ->actingAs($admin, 'sanctum')
             ->getJson('/api/admin/dashboard/geography?days=7')
             ->assertOk()
-            ->assertJsonPath('data.summary.usage_events_count', 1);
+            ->assertJsonPath('data.summary.usage_events_count', 1)
+            ->assertJsonCount(1, 'data.usage_events_by_city');
 
         $this
             ->actingAs($admin, 'sanctum')
             ->getJson('/api/admin/dashboard/geography?days=30')
             ->assertOk()
-            ->assertJsonPath('data.summary.usage_events_count', 2);
+            ->assertJsonPath('data.summary.usage_events_count', 2)
+            ->assertJsonCount(2, 'data.usage_events_by_city');
 
         $this
             ->actingAs($admin, 'sanctum')
             ->getJson('/api/admin/dashboard/geography?days=90')
             ->assertOk()
-            ->assertJsonPath('data.summary.usage_events_count', 3);
+            ->assertJsonPath('data.summary.usage_events_count', 3)
+            ->assertJsonCount(3, 'data.usage_events_by_city');
 
         $this
             ->actingAs($admin, 'sanctum')
             ->getJson('/api/admin/dashboard/geography?days=all')
             ->assertOk()
-            ->assertJsonPath('data.summary.usage_events_count', 4);
+            ->assertJsonPath('data.summary.usage_events_count', 4)
+            ->assertJsonCount(4, 'data.usage_events_by_city');
 
         $this
             ->actingAs($admin, 'sanctum')
             ->getJson('/api/admin/dashboard/geography?days=invalid')
             ->assertOk()
-            ->assertJsonPath('data.summary.usage_events_count', 2);
+            ->assertJsonPath('data.summary.usage_events_count', 2)
+            ->assertJsonCount(2, 'data.usage_events_by_city');
     }
 
     public function test_geography_endpoint_does_not_expose_private_analytics_or_user_fields(): void
@@ -226,6 +280,8 @@ class AdminGeographyAnalyticsTest extends TestCase
             'country_code' => 'MA',
             'country_name' => 'Morocco',
             'country_source' => 'CF-IPCountry',
+            'region_name' => 'Casablanca-Settat',
+            'city_name' => 'Casablanca',
             'ip_hash' => 'private-ip-hash',
             'user_agent_hash' => 'private-user-agent-hash',
             'metadata' => ['source' => 'api'],
@@ -246,6 +302,8 @@ class AdminGeographyAnalyticsTest extends TestCase
         $this->assertStringNotContainsString('user_agent_hash', $json);
         $this->assertStringNotContainsString('private-ip-hash', $json);
         $this->assertStringNotContainsString('private-user-agent-hash', $json);
+        $this->assertStringNotContainsString('gps', strtolower($json));
+        $this->assertStringNotContainsString('address', strtolower($json));
     }
 
     public function test_auth_still_works_when_country_cannot_be_resolved(): void
@@ -272,18 +330,26 @@ class AdminGeographyAnalyticsTest extends TestCase
         ];
     }
 
-    private function userWithCountries(
+    private function userWithGeography(
         ?string $registeredCode,
         ?string $registeredName,
+        ?string $registeredRegion,
+        ?string $registeredCity,
         ?string $lastSeenCode,
-        ?string $lastSeenName
+        ?string $lastSeenName,
+        ?string $lastSeenRegion,
+        ?string $lastSeenCity
     ): User {
         $user = User::factory()->create();
         $user->forceFill([
             'registered_country_code' => $registeredCode,
             'registered_country_name' => $registeredName,
+            'registered_region_name' => $registeredRegion,
+            'registered_city_name' => $registeredCity,
             'last_seen_country_code' => $lastSeenCode,
             'last_seen_country_name' => $lastSeenName,
+            'last_seen_region_name' => $lastSeenRegion,
+            'last_seen_city_name' => $lastSeenCity,
             'last_seen_at' => now(),
         ])->save();
 
@@ -295,7 +361,9 @@ class AdminGeographyAnalyticsTest extends TestCase
         string $eventType,
         ?string $countryCode,
         string $countryName,
-        $occurredAt = null
+        $occurredAt = null,
+        string $regionName = 'Unknown',
+        string $cityName = 'Unknown'
     ): AnalyticsEvent {
         return AnalyticsEvent::create([
             'user_id' => $user->id,
@@ -303,6 +371,8 @@ class AdminGeographyAnalyticsTest extends TestCase
             'country_code' => $countryCode,
             'country_name' => $countryName,
             'country_source' => 'CF-IPCountry',
+            'region_name' => $regionName,
+            'city_name' => $cityName,
             'ip_hash' => hash('sha256', '127.0.0.1'),
             'user_agent_hash' => hash('sha256', 'Test Browser'),
             'metadata' => ['source' => 'test'],

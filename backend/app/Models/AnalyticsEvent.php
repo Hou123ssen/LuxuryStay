@@ -15,6 +15,8 @@ class AnalyticsEvent extends Model
         'country_code',
         'country_name',
         'country_source',
+        'region_name',
+        'city_name',
         'ip_hash',
         'user_agent_hash',
         'metadata',
