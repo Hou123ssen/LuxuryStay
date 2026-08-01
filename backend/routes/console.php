@@ -1,8 +1,11 @@
 <?php
 
 use Illuminate\Foundation\Inspiring;
+use App\Console\Commands\SeedDemoGeographyAnalyticsCommand;
 use App\Models\CallSession;
 use Illuminate\Support\Facades\Artisan;
+
+Artisan::registerCommand(app(SeedDemoGeographyAnalyticsCommand::class));
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
