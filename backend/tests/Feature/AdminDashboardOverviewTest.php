@@ -8,6 +8,7 @@ use App\Models\Report;
 use App\Models\Review;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class AdminDashboardOverviewTest extends TestCase
@@ -62,6 +63,61 @@ class AdminDashboardOverviewTest extends TestCase
                     'alerts',
                 ],
             ]);
+    }
+
+    public function test_overview_works_with_empty_database(): void
+    {
+        $admin = $this->admin();
+
+        $this
+            ->actingAs($admin, 'sanctum')
+            ->getJson('/api/admin/dashboard/overview')
+            ->assertOk()
+            ->assertJsonPath('data.totals.users_count', 1)
+            ->assertJsonPath('data.totals.properties_count', 0)
+            ->assertJsonPath('data.totals.bookings_count', 0)
+            ->assertJsonPath('data.totals.reviews_count', 0)
+            ->assertJsonPath('data.totals.reports_count', 0)
+            ->assertJsonPath('data.recent_activity.bookings', [])
+            ->assertJsonPath('data.recent_activity.reports', [])
+            ->assertJsonPath('data.recent_activity.reviews', [])
+            ->assertJsonPath('data.alerts', []);
+    }
+
+    public function test_overview_returns_safe_zeroes_when_reports_table_is_missing(): void
+    {
+        $admin = $this->admin();
+
+        Schema::dropIfExists('reports_backup_for_dashboard_test');
+        Schema::rename('reports', 'reports_backup_for_dashboard_test');
+
+        try {
+            $response = $this
+                ->actingAs($admin, 'sanctum')
+                ->getJson('/api/admin/dashboard/overview')
+                ->assertOk()
+                ->assertJsonPath('data.totals.reports_count', 0)
+                ->assertJsonPath('data.moderation.pending_reports_count', 0)
+                ->assertJsonPath('data.moderation.reviewed_reports_count', 0)
+                ->assertJsonPath('data.moderation.unresolved_reports_count', 0)
+                ->assertJsonPath('data.trust_and_safety.properties_with_unresolved_reports_count', 0)
+                ->assertJsonPath('data.trust_and_safety.properties_with_serious_report_signals_count', 0)
+                ->assertJsonPath('data.recent_activity.reports', []);
+
+            $dataHealthAlert = collect($response->json('data.alerts'))
+                ->firstWhere('type', 'dashboard_data_incomplete');
+
+            $this->assertNotNull($dataHealthAlert);
+            $this->assertSame('warning', $dataHealthAlert['severity']);
+            $this->assertSame('Dashboard data incomplete', $dataHealthAlert['title']);
+            $this->assertSame(
+                'Some platform data cannot be calculated because database setup is incomplete.',
+                $dataHealthAlert['description'],
+            );
+            $this->assertNull($dataHealthAlert['action_url']);
+        } finally {
+            Schema::rename('reports_backup_for_dashboard_test', 'reports');
+        }
     }
 
     public function test_totals_count_platform_records_correctly(): void

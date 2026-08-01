@@ -9,6 +9,7 @@ use App\Models\Review;
 use App\Models\User;
 use App\Support\OwnerReliability;
 use App\Support\PropertyRating;
+use Illuminate\Support\Facades\Schema;
 
 class AdminDashboardOverviewService
 {
@@ -42,40 +43,60 @@ class AdminDashboardOverviewService
             'owners_count' => (int) ($roleCounts->get('owner') ?? Property::query()->distinct('user_id')->count('user_id')),
             'admins_count' => (int) ($roleCounts->get('admin') ?? 0),
             'role_breakdown' => $roleCounts->all(),
-            'properties_count' => Property::count(),
-            'bookings_count' => Booking::count(),
-            'reviews_count' => Review::count(),
-            'reports_count' => Report::count(),
+            'properties_count' => $this->countIfTableExists('properties'),
+            'bookings_count' => $this->countIfTableExists('bookings'),
+            'reviews_count' => $this->countIfTableExists('reviews'),
+            'reports_count' => $this->countIfTableExists('reports'),
         ];
     }
 
     private function bookings(): array
     {
+        if (! $this->hasTable('bookings')) {
+            return [
+                'pending_bookings_count' => 0,
+                'accepted_bookings_count' => 0,
+                'completed_bookings_count' => 0,
+                'cancelled_bookings_count' => 0,
+                'rejected_bookings_count' => 0,
+                'owner_cancelled_bookings_count' => 0,
+                'guest_cancelled_bookings_count' => 0,
+            ];
+        }
+
         return [
             'pending_bookings_count' => Booking::where('status', Booking::STATUS_PENDING)->count(),
             'accepted_bookings_count' => Booking::where('status', Booking::STATUS_ACCEPTED)->count(),
             'completed_bookings_count' => Booking::where('status', Booking::STATUS_COMPLETED)->count(),
             'cancelled_bookings_count' => Booking::where('status', Booking::STATUS_CANCELLED)->count(),
             'rejected_bookings_count' => Booking::where('status', Booking::STATUS_REJECTED)->count(),
-            'owner_cancelled_bookings_count' => Booking::where('cancellation_actor', Booking::CANCELLATION_ACTOR_OWNER)->count(),
-            'guest_cancelled_bookings_count' => Booking::where('cancellation_actor', Booking::CANCELLATION_ACTOR_GUEST)->count(),
+            'owner_cancelled_bookings_count' => $this->hasColumn('bookings', 'cancellation_actor')
+                ? Booking::where('cancellation_actor', Booking::CANCELLATION_ACTOR_OWNER)->count()
+                : 0,
+            'guest_cancelled_bookings_count' => $this->hasColumn('bookings', 'cancellation_actor')
+                ? Booking::where('cancellation_actor', Booking::CANCELLATION_ACTOR_GUEST)->count()
+                : 0,
         ];
     }
 
     private function moderation(): array
     {
         $highRiskThreshold = config('reviews.risk.high_risk_threshold');
+        $hasReports = $this->hasTable('reports') && $this->hasColumn('reports', 'status');
+        $hasReviews = $this->hasTable('reviews') && $this->hasColumn('reviews', 'status');
 
         return [
-            'pending_reports_count' => Report::where('status', Report::STATUS_PENDING)->count(),
-            'reviewed_reports_count' => Report::where('status', Report::STATUS_REVIEWED)->count(),
-            'unresolved_reports_count' => Report::open()->count(),
-            'pending_reviews_count' => Review::where('status', Review::STATUS_PENDING_REVIEW)->count(),
-            'rejected_reviews_count' => Review::where('status', Review::STATUS_REJECTED)->count(),
-            'published_reviews_count' => Review::where('status', Review::STATUS_PUBLISHED)->count(),
-            'high_risk_reviews_count' => Review::where('status', Review::STATUS_PENDING_REVIEW)
-                ->where('risk_score', '>=', $highRiskThreshold)
-                ->count(),
+            'pending_reports_count' => $hasReports ? Report::where('status', Report::STATUS_PENDING)->count() : 0,
+            'reviewed_reports_count' => $hasReports ? Report::where('status', Report::STATUS_REVIEWED)->count() : 0,
+            'unresolved_reports_count' => $hasReports ? Report::open()->count() : 0,
+            'pending_reviews_count' => $hasReviews ? Review::where('status', Review::STATUS_PENDING_REVIEW)->count() : 0,
+            'rejected_reviews_count' => $hasReviews ? Review::where('status', Review::STATUS_REJECTED)->count() : 0,
+            'published_reviews_count' => $hasReviews ? Review::where('status', Review::STATUS_PUBLISHED)->count() : 0,
+            'high_risk_reviews_count' => $hasReviews && $this->hasColumn('reviews', 'risk_score')
+                ? Review::where('status', Review::STATUS_PENDING_REVIEW)
+                    ->where('risk_score', '>=', $highRiskThreshold)
+                    ->count()
+                : 0,
         ];
     }
 
@@ -83,7 +104,7 @@ class AdminDashboardOverviewService
     {
         return [
             'properties_with_trust_badge_count' => $this->propertiesWithTrustBadgeCount(),
-            'properties_with_unresolved_reports_count' => Report::open()->distinct('property_id')->count('property_id'),
+            'properties_with_unresolved_reports_count' => $this->propertiesWithUnresolvedReportsCount(),
             'properties_with_serious_report_signals_count' => $this->propertiesWithSeriousReportSignalsCount(),
             'owners_with_high_cancellation_rate_count' => $this->ownersWithHighCancellationRateCount(),
         ];
@@ -91,16 +112,24 @@ class AdminDashboardOverviewService
 
     private function propertiesWithTrustBadgeCount(): int
     {
+        if (! $this->hasTable('properties') || ! $this->hasTable('reviews') || ! $this->hasColumn('reviews', 'status')) {
+            return 0;
+        }
+
         $highRiskThreshold = config('reviews.risk.high_risk_threshold');
-        $properties = Property::query()
+        $query = Property::query()
             ->withAvg(['reviews' => fn ($query) => $query->published()], 'rating')
-            ->withCount(['reviews' => fn ($query) => $query->published()])
-            ->withCount([
+            ->withCount(['reviews' => fn ($query) => $query->published()]);
+
+        if ($this->hasColumn('reviews', 'risk_score')) {
+            $query->withCount([
                 'reviews as pending_high_risk_reviews_count' => fn ($query) => $query
                     ->where('status', Review::STATUS_PENDING_REVIEW)
                     ->where('risk_score', '>=', $highRiskThreshold),
-            ])
-            ->get();
+            ]);
+        }
+
+        $properties = $query->get();
 
         return $properties
             ->map(fn (Property $property) => PropertyRating::apply($property))
@@ -110,6 +139,16 @@ class AdminDashboardOverviewService
 
     private function propertiesWithSeriousReportSignalsCount(): int
     {
+        if (
+            ! $this->hasTable('reports')
+            || ! $this->hasColumn('reports', 'status')
+            || ! $this->hasColumn('reports', 'severity')
+            || ! $this->hasColumn('reports', 'category')
+            || ! $this->hasColumn('reports', 'property_id')
+        ) {
+            return 0;
+        }
+
         return Report::query()
             ->whereIn('status', Report::OPEN_STATUSES)
             ->where(function ($signals) {
@@ -121,8 +160,29 @@ class AdminDashboardOverviewService
             ->count('property_id');
     }
 
+    private function propertiesWithUnresolvedReportsCount(): int
+    {
+        if (
+            ! $this->hasTable('reports')
+            || ! $this->hasColumn('reports', 'status')
+            || ! $this->hasColumn('reports', 'property_id')
+        ) {
+            return 0;
+        }
+
+        return Report::open()->distinct('property_id')->count('property_id');
+    }
+
     private function ownersWithHighCancellationRateCount(): int
     {
+        if (
+            ! $this->hasTable('properties')
+            || ! $this->hasTable('bookings')
+            || ! $this->hasColumn('bookings', 'cancellation_actor')
+        ) {
+            return 0;
+        }
+
         return OwnerReliability::forOwnerIds(Property::query()->pluck('user_id'))
             ->filter(fn (array $metrics) => $metrics['owner_reliability_label'] === 'High cancellation history')
             ->count();
@@ -131,7 +191,7 @@ class AdminDashboardOverviewService
     private function recentActivity(): array
     {
         return [
-            'bookings' => Booking::query()
+            'bookings' => $this->hasTable('bookings') ? Booking::query()
                 ->with('property:id,title')
                 ->latest()
                 ->limit(5)
@@ -146,8 +206,8 @@ class AdminDashboardOverviewService
                     'end_date' => $booking->end_date?->toDateString(),
                     'created_at' => $booking->created_at?->toJSON(),
                 ])
-                ->all(),
-            'reports' => Report::query()
+                ->all() : [],
+            'reports' => $this->hasTable('reports') ? Report::query()
                 ->with('property:id,title')
                 ->latest()
                 ->limit(5)
@@ -161,8 +221,8 @@ class AdminDashboardOverviewService
                     'property_title' => $report->property?->title,
                     'created_at' => $report->created_at?->toJSON(),
                 ])
-                ->all(),
-            'reviews' => Review::query()
+                ->all() : [],
+            'reviews' => $this->hasTable('reviews') ? Review::query()
                 ->with('property:id,title')
                 ->latest()
                 ->limit(5)
@@ -176,13 +236,23 @@ class AdminDashboardOverviewService
                     'user_id' => $review->user_id,
                     'created_at' => $review->created_at?->toJSON(),
                 ])
-                ->all(),
+                ->all() : [],
         ];
     }
 
     private function alerts(array $moderation, array $trustAndSafety): array
     {
         $alerts = [];
+
+        if ($this->hasIncompleteDashboardData()) {
+            $alerts[] = $this->alert(
+                'dashboard_data_incomplete',
+                'warning',
+                'Dashboard data incomplete',
+                'Some platform data cannot be calculated because database setup is incomplete.',
+                null
+            );
+        }
 
         if ($moderation['pending_reports_count'] > 0) {
             $alerts[] = $this->alert('pending_reports', 'warning', 'Reports need review', 'There are pending guest reports waiting for moderation.', '/admin/reports');
@@ -207,7 +277,7 @@ class AdminDashboardOverviewService
         return $alerts;
     }
 
-    private function alert(string $type, string $severity, string $title, string $description, string $actionUrl): array
+    private function alert(string $type, string $severity, string $title, string $description, ?string $actionUrl): array
     {
         return [
             'type' => $type,
@@ -216,5 +286,36 @@ class AdminDashboardOverviewService
             'description' => $description,
             'action_url' => $actionUrl,
         ];
+    }
+
+    private function hasIncompleteDashboardData(): bool
+    {
+        return collect(['users', 'properties', 'bookings', 'reviews', 'reports'])
+            ->contains(fn (string $table) => ! $this->hasTable($table));
+    }
+
+    private function countIfTableExists(string $table): int
+    {
+        if (! $this->hasTable($table)) {
+            return 0;
+        }
+
+        return match ($table) {
+            'bookings' => Booking::count(),
+            'properties' => Property::count(),
+            'reports' => Report::count(),
+            'reviews' => Review::count(),
+            default => 0,
+        };
+    }
+
+    private function hasTable(string $table): bool
+    {
+        return Schema::hasTable($table);
+    }
+
+    private function hasColumn(string $table, string $column): bool
+    {
+        return $this->hasTable($table) && Schema::hasColumn($table, $column);
     }
 }
