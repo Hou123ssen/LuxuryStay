@@ -1,7 +1,13 @@
 import { Link } from 'react-router-dom';
-import { FiAlertTriangle, FiStar } from 'react-icons/fi';
+import { FiAlertTriangle, FiGlobe, FiStar } from 'react-icons/fi';
 
 const ACTIONS = [
+  {
+    to: '/admin/geography',
+    title: 'Geography & Usage',
+    description: 'Review aggregated country and city activity across platform usage.',
+    icon: FiGlobe,
+  },
   {
     to: '/admin/reports',
     title: 'Reports Moderation',
@@ -18,7 +24,7 @@ const ACTIONS = [
 
 export default function AdminQuickActions() {
   return (
-    <section className="grid gap-4 md:grid-cols-2">
+    <section className="grid gap-4 md:grid-cols-3">
       {ACTIONS.map((action) => {
         const Icon = action.icon;
 

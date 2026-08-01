@@ -25,8 +25,8 @@ export default function AdminReports() {
   } = useAdminReports();
 
   return (
-    <div className="min-h-screen px-4 py-10">
-      <div className="mx-auto max-w-6xl">
+    <div>
+      <div className="max-w-6xl">
         <div className="mb-8 fade-up">
           <div className="ornament-divider mb-3 max-w-sm">
             <span className="text-xs uppercase tracking-[0.3em] text-gold/55">Admin</span>
