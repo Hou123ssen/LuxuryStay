@@ -3,13 +3,14 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Services\Analytics\AnalyticsEventService;
 use Illuminate\Http\Request;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 
 class AuthController extends Controller
 {
-    public function register(Request $request)
+    public function register(Request $request, AnalyticsEventService $analytics)
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -24,6 +25,7 @@ class AuthController extends Controller
         ]);
 
         $user->refresh();
+        $analytics->recordUserRegistered($user, $request, ['source' => 'api']);
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
@@ -34,7 +36,7 @@ class AuthController extends Controller
         ], 201);
     }
 
-    public function login(Request $request)
+    public function login(Request $request, AnalyticsEventService $analytics)
     {
         $validated = $request->validate([
             'email' => 'required|email',
@@ -48,6 +50,8 @@ class AuthController extends Controller
                 'message' => 'Invalid credentials',
             ], 401);
         }
+
+        $analytics->recordUserLoggedIn($user, $request, ['source' => 'api']);
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
