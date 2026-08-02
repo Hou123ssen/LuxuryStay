@@ -7,6 +7,7 @@ use App\Models\Booking;
 use App\Models\Report;
 use App\Models\Review;
 use App\Models\User;
+use App\Services\Analytics\DemoAnalyticsDataService;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Carbon\CarbonPeriod;
@@ -17,12 +18,16 @@ use Illuminate\Support\Facades\Schema;
 
 class AdminDashboardChartsService
 {
-    public function overview(Request $request): array
+    public function __construct(private readonly DemoAnalyticsDataService $demoData)
     {
-        $period = $this->period($request);
+    }
 
-        $registrations = $this->registrationsSeries($period);
-        $logins = $this->analyticsSeries(AnalyticsEvent::TYPE_USER_LOGGED_IN, $period);
+    public function overview(Request $request, bool $includeDemo = true): array
+    {
+        $period = $this->period($request, $includeDemo);
+
+        $registrations = $this->registrationsSeries($period, $includeDemo);
+        $logins = $this->analyticsSeries(AnalyticsEvent::TYPE_USER_LOGGED_IN, $period, $includeDemo);
         $bookings = $this->modelSeries(Booking::query(), 'bookings', 'created_at', $period);
         $reviews = $this->modelSeries(Review::query(), 'reviews', 'created_at', $period);
         $reports = $this->hasTable('reports')
@@ -60,7 +65,7 @@ class AdminDashboardChartsService
         ];
     }
 
-    private function period(Request $request): array
+    private function period(Request $request, bool $includeDemo): array
     {
         $days = in_array((string) $request->query('days', '30'), ['7', '30', '90', 'all'], true)
             ? (string) $request->query('days', '30')
@@ -73,7 +78,7 @@ class AdminDashboardChartsService
 
         $end = today();
         $start = $days === 'all'
-            ? $this->earliestAvailableDate()->startOfMonth()
+            ? $this->earliestAvailableDate($includeDemo)->startOfMonth()
             : today()->subDays(((int) $days) - 1);
 
         return [
@@ -84,11 +89,11 @@ class AdminDashboardChartsService
         ];
     }
 
-    private function earliestAvailableDate(): Carbon
+    private function earliestAvailableDate(bool $includeDemo): Carbon
     {
         $dates = collect([
-            $this->minimumTimestamp('users', 'created_at'),
-            $this->minimumTimestamp('analytics_events', 'occurred_at'),
+            $this->minimumTimestamp('users', 'created_at', $includeDemo),
+            $this->minimumTimestamp('analytics_events', 'occurred_at', $includeDemo),
             $this->minimumTimestamp('bookings', 'created_at'),
             $this->minimumTimestamp('reviews', 'created_at'),
             $this->minimumTimestamp('reports', 'created_at'),
@@ -104,27 +109,27 @@ class AdminDashboardChartsService
             ->first();
     }
 
-    private function registrationsSeries(array $period): array
+    private function registrationsSeries(array $period, bool $includeDemo): array
     {
         if ($this->hasTable('analytics_events') && $this->hasColumn('analytics_events', 'occurred_at')) {
-            $analytics = $this->analyticsSeries(AnalyticsEvent::TYPE_USER_REGISTERED, $period);
+            $analytics = $this->analyticsSeries(AnalyticsEvent::TYPE_USER_REGISTERED, $period, $includeDemo);
 
             if ($this->sumSeries($analytics) > 0 || ! $this->hasTable('users')) {
                 return $analytics;
             }
         }
 
-        return $this->modelSeries(User::query(), 'users', 'created_at', $period);
+        return $this->modelSeries($this->demoData->usersQuery($includeDemo), 'users', 'created_at', $period);
     }
 
-    private function analyticsSeries(string $eventType, array $period): array
+    private function analyticsSeries(string $eventType, array $period, bool $includeDemo): array
     {
         if (! $this->hasTable('analytics_events') || ! $this->hasColumn('analytics_events', 'occurred_at')) {
             return $this->emptySeries($period);
         }
 
         return $this->modelSeries(
-            AnalyticsEvent::query()->where('event_type', $eventType),
+            $this->demoData->eventsQuery($includeDemo)->where('event_type', $eventType),
             'analytics_events',
             'occurred_at',
             $period
@@ -217,15 +222,15 @@ class AdminDashboardChartsService
         return collect($series)->sum('count');
     }
 
-    private function minimumTimestamp(string $table, string $column): mixed
+    private function minimumTimestamp(string $table, string $column, bool $includeDemo = true): mixed
     {
         if (! $this->hasTable($table) || ! $this->hasColumn($table, $column)) {
             return null;
         }
 
         return match ($table) {
-            'users' => User::query()->min($column),
-            'analytics_events' => AnalyticsEvent::query()->min($column),
+            'users' => $this->demoData->usersQuery($includeDemo)->min($column),
+            'analytics_events' => $this->demoData->eventsQuery($includeDemo)->min($column),
             'bookings' => Booking::query()->min($column),
             'reviews' => Review::query()->min($column),
             'reports' => Report::query()->min($column),

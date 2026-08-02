@@ -7,19 +7,24 @@ use App\Models\Property;
 use App\Models\Report;
 use App\Models\Review;
 use App\Models\User;
+use App\Services\Analytics\DemoAnalyticsDataService;
 use App\Support\OwnerReliability;
 use App\Support\PropertyRating;
 use Illuminate\Support\Facades\Schema;
 
 class AdminDashboardOverviewService
 {
-    public function overview(): array
+    public function __construct(private readonly DemoAnalyticsDataService $demoData)
+    {
+    }
+
+    public function overview(bool $includeDemo = true): array
     {
         $moderation = $this->moderation();
         $trustAndSafety = $this->trustAndSafety();
 
         return [
-            'totals' => $this->totals(),
+            'totals' => $this->totals($includeDemo),
             'bookings' => $this->bookings(),
             'moderation' => $moderation,
             'trust_and_safety' => $trustAndSafety,
@@ -28,9 +33,10 @@ class AdminDashboardOverviewService
         ];
     }
 
-    private function totals(): array
+    private function totals(bool $includeDemo): array
     {
-        $roleCounts = User::query()
+        $usersQuery = $this->demoData->usersQuery($includeDemo);
+        $roleCounts = (clone $usersQuery)
             ->select('role')
             ->selectRaw('COUNT(*) as aggregate')
             ->groupBy('role')
@@ -38,7 +44,7 @@ class AdminDashboardOverviewService
             ->map(fn ($count) => (int) $count);
 
         return [
-            'users_count' => User::count(),
+            'users_count' => (clone $usersQuery)->count(),
             'guests_count' => (int) ($roleCounts->get('guest') ?? 0),
             'owners_count' => (int) ($roleCounts->get('owner') ?? Property::query()->distinct('user_id')->count('user_id')),
             'admins_count' => (int) ($roleCounts->get('admin') ?? 0),

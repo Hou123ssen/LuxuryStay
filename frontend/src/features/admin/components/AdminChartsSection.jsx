@@ -11,7 +11,7 @@ import {
   normalizeSeries,
 } from '../utils/adminChartFormatters';
 
-export default function AdminChartsSection() {
+export default function AdminChartsSection({ includeDemo = true }) {
   const {
     charts,
     days,
@@ -21,7 +21,7 @@ export default function AdminChartsSection() {
     error,
     refresh,
     retry,
-  } = useAdminDashboardCharts('30');
+  } = useAdminDashboardCharts('30', includeDemo);
 
   const series = charts?.series || {};
   const breakdowns = charts?.breakdowns || {};

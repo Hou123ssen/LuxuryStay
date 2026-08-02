@@ -1,6 +1,9 @@
 import AdminGeographySection from '../components/AdminGeographySection';
+import { useAdminDemoDataPreference } from '../hooks/useAdminDemoDataPreference';
 
 export default function AdminGeography() {
+  const [includeDemo, setIncludeDemo] = useAdminDemoDataPreference(true);
+
   return (
     <div className="space-y-6">
       <header className="fade-up">
@@ -15,7 +18,7 @@ export default function AdminGeography() {
         </p>
       </header>
 
-      <AdminGeographySection />
+      <AdminGeographySection includeDemo={includeDemo} onIncludeDemoChange={setIncludeDemo} />
     </div>
   );
 }

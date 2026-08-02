@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { adminChartsApi } from '../api/adminChartsApi';
 
-export function useAdminDashboardCharts(defaultDays = '30') {
+export function useAdminDashboardCharts(defaultDays = '30', includeDemo = true) {
   const [days, setDays] = useState(defaultDays);
   const [charts, setCharts] = useState(null);
+  const [meta, setMeta] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -18,15 +19,19 @@ export function useAdminDashboardCharts(defaultDays = '30') {
     setError('');
 
     try {
-      const response = await adminChartsApi.getAdminDashboardCharts({ days: selectedDays });
+      const response = await adminChartsApi.getAdminDashboardCharts({
+        days: selectedDays,
+        include_demo: includeDemo,
+      });
       setCharts(response.data?.data || null);
+      setMeta(response.data?.meta || null);
     } catch (err) {
       setError(err.response?.data?.message || 'Dashboard charts could not be loaded.');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [days]);
+  }, [days, includeDemo]);
 
   useEffect(() => {
     loadCharts({ selectedDays: days });
@@ -34,6 +39,7 @@ export function useAdminDashboardCharts(defaultDays = '30') {
 
   return {
     charts,
+    meta,
     days,
     setDays,
     loading,

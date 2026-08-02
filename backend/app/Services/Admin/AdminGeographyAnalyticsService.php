@@ -4,56 +4,61 @@ namespace App\Services\Admin;
 
 use App\Models\AnalyticsEvent;
 use App\Models\User;
+use App\Services\Analytics\DemoAnalyticsDataService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 
 class AdminGeographyAnalyticsService
 {
-    public function overview(Request $request): array
+    public function __construct(private readonly DemoAnalyticsDataService $demoData)
+    {
+    }
+
+    public function overview(Request $request, bool $includeDemo = true): array
     {
         $days = $this->days($request);
 
         return [
-            'summary' => $this->summary($days),
-            'users_by_registered_country' => $this->usersByCountry('registered_country_code', 'registered_country_name'),
-            'users_by_last_seen_country' => $this->usersByCountry('last_seen_country_code', 'last_seen_country_name'),
-            'usage_events_by_country' => $this->eventsByCountry($days),
-            'login_events_by_country' => $this->eventsByCountry($days, AnalyticsEvent::TYPE_USER_LOGGED_IN),
-            'registration_events_by_country' => $this->eventsByCountry($days, AnalyticsEvent::TYPE_USER_REGISTERED),
-            'users_by_registered_city' => $this->usersByCity('registered_city_name', 'registered_region_name', 'registered_country_code', 'registered_country_name'),
-            'users_by_last_seen_city' => $this->usersByCity('last_seen_city_name', 'last_seen_region_name', 'last_seen_country_code', 'last_seen_country_name'),
-            'usage_events_by_city' => $this->eventsByCity($days),
-            'login_events_by_city' => $this->eventsByCity($days, AnalyticsEvent::TYPE_USER_LOGGED_IN),
-            'registration_events_by_city' => $this->eventsByCity($days, AnalyticsEvent::TYPE_USER_REGISTERED),
-            'recent_country_activity' => $this->recentCountryActivity($days),
+            'summary' => $this->summary($days, $includeDemo),
+            'users_by_registered_country' => $this->usersByCountry('registered_country_code', 'registered_country_name', $includeDemo),
+            'users_by_last_seen_country' => $this->usersByCountry('last_seen_country_code', 'last_seen_country_name', $includeDemo),
+            'usage_events_by_country' => $this->eventsByCountry($days, $includeDemo),
+            'login_events_by_country' => $this->eventsByCountry($days, $includeDemo, AnalyticsEvent::TYPE_USER_LOGGED_IN),
+            'registration_events_by_country' => $this->eventsByCountry($days, $includeDemo, AnalyticsEvent::TYPE_USER_REGISTERED),
+            'users_by_registered_city' => $this->usersByCity('registered_city_name', 'registered_region_name', 'registered_country_code', 'registered_country_name', $includeDemo),
+            'users_by_last_seen_city' => $this->usersByCity('last_seen_city_name', 'last_seen_region_name', 'last_seen_country_code', 'last_seen_country_name', $includeDemo),
+            'usage_events_by_city' => $this->eventsByCity($days, $includeDemo),
+            'login_events_by_city' => $this->eventsByCity($days, $includeDemo, AnalyticsEvent::TYPE_USER_LOGGED_IN),
+            'registration_events_by_city' => $this->eventsByCity($days, $includeDemo, AnalyticsEvent::TYPE_USER_REGISTERED),
+            'recent_country_activity' => $this->recentCountryActivity($days, $includeDemo),
         ];
     }
 
-    private function summary(?int $days): array
+    private function summary(?int $days, bool $includeDemo): array
     {
         return [
-            'known_registered_country_users_count' => $this->knownUserCountryCount('registered_country_code'),
-            'unknown_registered_country_users_count' => $this->unknownUserCountryCount('registered_country_code'),
-            'known_last_seen_country_users_count' => $this->knownUserCountryCount('last_seen_country_code'),
-            'unknown_last_seen_country_users_count' => $this->unknownUserCountryCount('last_seen_country_code'),
-            'known_registered_city_users_count' => $this->knownUserLocationCount('registered_city_name'),
-            'unknown_registered_city_users_count' => $this->unknownUserLocationCount('registered_city_name'),
-            'known_last_seen_city_users_count' => $this->knownUserLocationCount('last_seen_city_name'),
-            'unknown_last_seen_city_users_count' => $this->unknownUserLocationCount('last_seen_city_name'),
+            'known_registered_country_users_count' => $this->knownUserCountryCount('registered_country_code', $includeDemo),
+            'unknown_registered_country_users_count' => $this->unknownUserCountryCount('registered_country_code', $includeDemo),
+            'known_last_seen_country_users_count' => $this->knownUserCountryCount('last_seen_country_code', $includeDemo),
+            'unknown_last_seen_country_users_count' => $this->unknownUserCountryCount('last_seen_country_code', $includeDemo),
+            'known_registered_city_users_count' => $this->knownUserLocationCount('registered_city_name', $includeDemo),
+            'unknown_registered_city_users_count' => $this->unknownUserLocationCount('registered_city_name', $includeDemo),
+            'known_last_seen_city_users_count' => $this->knownUserLocationCount('last_seen_city_name', $includeDemo),
+            'unknown_last_seen_city_users_count' => $this->unknownUserLocationCount('last_seen_city_name', $includeDemo),
             'usage_events_count' => $this->hasAnalyticsEventsTable()
-                ? $this->eventsBaseQuery($days)->count()
+                ? $this->eventsBaseQuery($days, $includeDemo)->count()
                 : 0,
         ];
     }
 
-    private function usersByCountry(string $codeColumn, string $nameColumn): array
+    private function usersByCountry(string $codeColumn, string $nameColumn, bool $includeDemo): array
     {
         if (! $this->hasUsersCountryColumns($codeColumn, $nameColumn)) {
             return [];
         }
 
-        return User::query()
+        return $this->demoData->usersQuery($includeDemo)
             ->selectRaw("$codeColumn as country_code")
             ->selectRaw("$nameColumn as country_name")
             ->selectRaw('COUNT(*) as aggregate')
@@ -64,13 +69,13 @@ class AdminGeographyAnalyticsService
             ->all();
     }
 
-    private function usersByCity(string $cityColumn, string $regionColumn, string $countryCodeColumn, string $countryNameColumn): array
+    private function usersByCity(string $cityColumn, string $regionColumn, string $countryCodeColumn, string $countryNameColumn, bool $includeDemo): array
     {
         if (! $this->hasUsersCityColumns($cityColumn, $regionColumn, $countryCodeColumn, $countryNameColumn)) {
             return [];
         }
 
-        return User::query()
+        return $this->demoData->usersQuery($includeDemo)
             ->selectRaw("$cityColumn as city_name")
             ->selectRaw("$regionColumn as region_name")
             ->selectRaw("$countryCodeColumn as country_code")
@@ -89,13 +94,13 @@ class AdminGeographyAnalyticsService
             ->all();
     }
 
-    private function eventsByCountry(?int $days, ?string $eventType = null): array
+    private function eventsByCountry(?int $days, bool $includeDemo, ?string $eventType = null): array
     {
         if (! $this->hasAnalyticsEventsTable()) {
             return [];
         }
 
-        $query = $this->eventsBaseQuery($days);
+        $query = $this->eventsBaseQuery($days, $includeDemo);
 
         if ($eventType !== null) {
             $query->where('event_type', $eventType);
@@ -111,13 +116,13 @@ class AdminGeographyAnalyticsService
             ->all();
     }
 
-    private function eventsByCity(?int $days, ?string $eventType = null): array
+    private function eventsByCity(?int $days, bool $includeDemo, ?string $eventType = null): array
     {
         if (! $this->hasAnalyticsEventCityColumns()) {
             return [];
         }
 
-        $query = $this->eventsBaseQuery($days);
+        $query = $this->eventsBaseQuery($days, $includeDemo);
 
         if ($eventType !== null) {
             $query->where('event_type', $eventType);
@@ -139,7 +144,7 @@ class AdminGeographyAnalyticsService
             ->all();
     }
 
-    private function recentCountryActivity(?int $days): array
+    private function recentCountryActivity(?int $days, bool $includeDemo): array
     {
         if (! $this->hasAnalyticsEventsTable()) {
             return [];
@@ -151,7 +156,7 @@ class AdminGeographyAnalyticsService
             $columns = ['id', 'event_type', 'user_id', 'country_code', 'country_name', 'region_name', 'city_name', 'occurred_at'];
         }
 
-        return $this->eventsBaseQuery($days)
+        return $this->eventsBaseQuery($days, $includeDemo)
             ->latest('occurred_at')
             ->limit(10)
             ->get($columns)
@@ -168,9 +173,9 @@ class AdminGeographyAnalyticsService
             ->all();
     }
 
-    private function eventsBaseQuery(?int $days): Builder
+    private function eventsBaseQuery(?int $days, bool $includeDemo): Builder
     {
-        $query = AnalyticsEvent::query();
+        $query = $this->demoData->eventsQuery($includeDemo);
 
         if ($days !== null) {
             $query->where('occurred_at', '>=', now()->subDays($days));
@@ -179,51 +184,51 @@ class AdminGeographyAnalyticsService
         return $query;
     }
 
-    private function knownUserCountryCount(string $codeColumn): int
+    private function knownUserCountryCount(string $codeColumn, bool $includeDemo): int
     {
         if (! Schema::hasTable('users') || ! Schema::hasColumn('users', $codeColumn)) {
             return 0;
         }
 
-        return User::query()->whereNotNull($codeColumn)->count();
+        return $this->demoData->usersQuery($includeDemo)->whereNotNull($codeColumn)->count();
     }
 
-    private function unknownUserCountryCount(string $codeColumn): int
+    private function unknownUserCountryCount(string $codeColumn, bool $includeDemo): int
     {
         if (! Schema::hasTable('users')) {
             return 0;
         }
 
         if (! Schema::hasColumn('users', $codeColumn)) {
-            return User::count();
+            return $this->demoData->usersQuery($includeDemo)->count();
         }
 
-        return User::query()->whereNull($codeColumn)->count();
+        return $this->demoData->usersQuery($includeDemo)->whereNull($codeColumn)->count();
     }
 
-    private function knownUserLocationCount(string $column): int
+    private function knownUserLocationCount(string $column, bool $includeDemo): int
     {
         if (! Schema::hasTable('users') || ! Schema::hasColumn('users', $column)) {
             return 0;
         }
 
-        return User::query()
+        return $this->demoData->usersQuery($includeDemo)
             ->whereNotNull($column)
             ->where($column, '!=', 'Unknown')
             ->count();
     }
 
-    private function unknownUserLocationCount(string $column): int
+    private function unknownUserLocationCount(string $column, bool $includeDemo): int
     {
         if (! Schema::hasTable('users')) {
             return 0;
         }
 
         if (! Schema::hasColumn('users', $column)) {
-            return User::count();
+            return $this->demoData->usersQuery($includeDemo)->count();
         }
 
-        return User::query()
+        return $this->demoData->usersQuery($includeDemo)
             ->where(fn (Builder $query) => $query
                 ->whereNull($column)
                 ->orWhere($column, 'Unknown'))

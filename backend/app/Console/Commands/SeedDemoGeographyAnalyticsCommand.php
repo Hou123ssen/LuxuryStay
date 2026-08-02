@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\AnalyticsEvent;
 use App\Models\User;
 use App\Services\Analytics\AnalyticsHashService;
+use App\Services\Analytics\DemoAnalyticsDataService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -119,20 +120,7 @@ class SeedDemoGeographyAnalyticsCommand extends Command
 
     private function deleteDemoData(): array
     {
-        $events = Schema::hasTable('analytics_events')
-            ? AnalyticsEvent::query()
-                ->where('metadata->demo', true)
-                ->where('metadata->source', self::DEMO_SOURCE)
-                ->delete()
-            : 0;
-
-        $users = Schema::hasTable('users')
-            ? User::query()
-                ->where('email', 'like', 'geo.demo.%@luxurrstay.test')
-                ->delete()
-            : 0;
-
-        return ['events' => $events, 'users' => $users];
+        return app(DemoAnalyticsDataService::class)->deleteDemoData();
     }
 
     private function demoDataExists(): bool

@@ -2,14 +2,17 @@ import { FiRefreshCw, FiShield } from 'react-icons/fi';
 import AdminAlertList from '../components/AdminAlertList';
 import AdminBookingSummary from '../components/AdminBookingSummary';
 import AdminChartsSection from '../components/AdminChartsSection';
+import AdminDemoDataNotice from '../components/AdminDemoDataNotice';
 import AdminOverviewStats from '../components/AdminOverviewStats';
 import AdminQuickActions from '../components/AdminQuickActions';
 import AdminRecentActivity from '../components/AdminRecentActivity';
 import AdminTrustSafetySummary from '../components/AdminTrustSafetySummary';
+import { useAdminDemoDataPreference } from '../hooks/useAdminDemoDataPreference';
 import { useAdminDashboardOverview } from '../hooks/useAdminDashboardOverview';
 
 export default function AdminDashboard() {
-  const { overview, loading, refreshing, error, refresh, retry } = useAdminDashboardOverview();
+  const [includeDemo, setIncludeDemo] = useAdminDemoDataPreference(true);
+  const { overview, meta, loading, refreshing, error, refresh, retry } = useAdminDashboardOverview(includeDemo);
 
   if (loading) {
     return (
@@ -75,9 +78,14 @@ export default function AdminDashboard() {
         </div>
       </header>
 
+      <AdminDemoDataNotice
+        demoData={meta?.demo_data}
+        includeDemo={includeDemo}
+        onIncludeDemoChange={setIncludeDemo}
+      />
       <AdminOverviewStats totals={totals} moderation={moderation} />
       <AdminAlertList alerts={alerts} />
-      <AdminChartsSection />
+      <AdminChartsSection includeDemo={includeDemo} />
       <AdminBookingSummary bookings={bookings} moderation={moderation} />
       <AdminTrustSafetySummary trustAndSafety={trustAndSafety} />
       <AdminRecentActivity activity={recentActivity} />

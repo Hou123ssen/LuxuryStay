@@ -1,5 +1,5 @@
 import api from '../../../shared/api/api';
 
 export const adminDashboardApi = {
-  getAdminDashboardOverview: () => api.get('/admin/dashboard/overview'),
+  getAdminDashboardOverview: (params = {}) => api.get('/admin/dashboard/overview', { params }),
 };

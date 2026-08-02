@@ -3,21 +3,23 @@ import { useAdminGeographyAnalytics } from '../hooks/useAdminGeographyAnalytics'
 import AdminCityUsageTable from './AdminCityUsageTable';
 import AdminCountryUsageTable from './AdminCountryUsageTable';
 import AdminGeoSummaryCards from './AdminGeoSummaryCards';
+import AdminDemoDataNotice from './AdminDemoDataNotice';
 import AdminGeographyFilters from './AdminGeographyFilters';
 import AdminRecentGeoActivity from './AdminRecentGeoActivity';
 import AdminWorldUsageMap from './AdminWorldUsageMap';
 
-export default function AdminGeographySection() {
+export default function AdminGeographySection({ includeDemo = true, onIncludeDemoChange }) {
   const {
     days,
     setDays,
     geography,
+    meta,
     loading,
     refreshing,
     error,
     refresh,
     retry,
-  } = useAdminGeographyAnalytics();
+  } = useAdminGeographyAnalytics('30', includeDemo);
 
   if (loading) {
     return (
@@ -69,6 +71,11 @@ export default function AdminGeographySection() {
       </div>
 
       <div className="mt-5 space-y-5">
+        <AdminDemoDataNotice
+          demoData={meta?.demo_data}
+          includeDemo={includeDemo}
+          onIncludeDemoChange={onIncludeDemoChange}
+        />
         <AdminGeoSummaryCards summary={summary} />
 
         <AdminWorldUsageMap
