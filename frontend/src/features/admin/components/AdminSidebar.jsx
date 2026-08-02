@@ -1,10 +1,11 @@
 import { NavLink } from 'react-router-dom';
-import { FiAlertTriangle, FiBarChart2, FiChevronLeft, FiChevronRight, FiGlobe, FiStar, FiUsers } from 'react-icons/fi';
+import { FiAlertTriangle, FiBarChart2, FiChevronLeft, FiChevronRight, FiGlobe, FiHome, FiStar, FiUsers } from 'react-icons/fi';
 
 const NAV_ITEMS = [
   { to: '/admin', label: 'Overview', icon: FiBarChart2, end: true },
   { to: '/admin/geography', label: 'Geography & Usage', icon: FiGlobe },
   { to: '/admin/users', label: 'Users', icon: FiUsers },
+  { to: '/admin/properties', label: 'Properties', icon: FiHome },
   { to: '/admin/reports', label: 'Reports Moderation', icon: FiAlertTriangle },
   { to: '/admin/reviews', label: 'Reviews Moderation', icon: FiStar },
 ];
