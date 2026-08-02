@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\AdminDashboardController;
 use App\Http\Controllers\Api\AdminGeographyController;
 use App\Http\Controllers\Api\AdminReportController;
 use App\Http\Controllers\Api\AdminReviewController;
+use App\Http\Controllers\Api\AdminUserController;
 use App\Http\Controllers\Api\CallSessionController;
 use App\Http\Controllers\Api\ChatController;
 use App\Http\Controllers\Api\ConversationController;
@@ -68,6 +69,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/dashboard/charts',     [AdminDashboardChartsController::class, 'index']);
     Route::get('/admin/dashboard/overview',   [AdminDashboardController::class, 'overview']);
     Route::get('/admin/dashboard/geography',  [AdminGeographyController::class, 'index']);
+    Route::get('/admin/users',                [AdminUserController::class, 'index']);
+    Route::get('/admin/users/{user}',         [AdminUserController::class, 'show']);
     Route::get('/admin/reports',              [AdminReportController::class, 'index']);
     Route::get('/admin/reports/{report}',     [AdminReportController::class, 'show']);
     Route::put('/admin/reports/{report}/review', [AdminReportController::class, 'review']);
