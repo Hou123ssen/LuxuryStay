@@ -109,13 +109,15 @@ class NavbarCountsTest extends TestCase
         $owner = User::factory()->create();
         $guest = User::factory()->create();
         $property = $this->propertyFor($owner);
+        $startDate = now()->addDay()->toDateString();
+        $endDate = now()->addDays(3)->toDateString();
 
         $this
             ->actingAs($guest, 'sanctum')
             ->postJson('/api/bookings', [
                 'property_id' => $property->id,
-                'start_date' => '2026-08-01',
-                'end_date' => '2026-08-03',
+                'start_date' => $startDate,
+                'end_date' => $endDate,
             ])
             ->assertCreated();
 

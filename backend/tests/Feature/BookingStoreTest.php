@@ -17,13 +17,15 @@ class BookingStoreTest extends TestCase
         $host = User::factory()->create();
         $guest = User::factory()->create();
         $property = $this->createPropertyFor($host, ['price_per_night' => 1000]);
+        $startDate = now()->addDay()->toDateString();
+        $endDate = now()->addDays(3)->toDateString();
 
         $response = $this
             ->actingAs($guest, 'sanctum')
             ->postJson('/api/bookings', [
                 'property_id' => $property->id,
-                'start_date' => '2026-08-01',
-                'end_date' => '2026-08-03',
+                'start_date' => $startDate,
+                'end_date' => $endDate,
             ]);
 
         $response
@@ -48,13 +50,15 @@ class BookingStoreTest extends TestCase
         $host = User::factory()->create();
         $guest = User::factory()->create();
         $property = $this->createPropertyFor($host, ['price_per_night' => 1000]);
+        $startDate = now()->addDay()->toDateString();
+        $endDate = now()->addDays(3)->toDateString();
 
         $this
             ->actingAs($guest, 'sanctum')
             ->postJson('/api/bookings', [
                 'property_id' => $property->id,
-                'start_date' => '2026-08-01',
-                'end_date' => '2026-08-03',
+                'start_date' => $startDate,
+                'end_date' => $endDate,
                 'total_price' => 1,
             ])
             ->assertCreated()
@@ -72,13 +76,15 @@ class BookingStoreTest extends TestCase
         $host = User::factory()->create();
         $guest = User::factory()->create();
         $property = $this->createPropertyFor($host, ['price_per_night' => 1000]);
+        $startDate = now()->addDay()->toDateString();
+        $endDate = now()->addDays(3)->toDateString();
 
         $this
             ->actingAs($guest, 'sanctum')
             ->postJson('/api/bookings', [
                 'property_id' => $property->id,
-                'start_date' => '2026-08-01',
-                'end_date' => '2026-08-03',
+                'start_date' => $startDate,
+                'end_date' => $endDate,
             ])
             ->assertCreated();
 
@@ -186,13 +192,15 @@ class BookingStoreTest extends TestCase
             'title' => 'Mansoria',
             'price_per_night' => 1000,
         ]);
+        $startDate = now()->addDay()->toDateString();
+        $endDate = now()->addDays(3)->toDateString();
 
         $response = $this
             ->actingAs($guest, 'sanctum')
             ->postJson('/api/bookings', [
                 'property_id' => $property->id,
-                'start_date' => '2026-08-01',
-                'end_date' => '2026-08-03',
+                'start_date' => $startDate,
+                'end_date' => $endDate,
             ])
             ->assertCreated();
 
@@ -205,8 +213,8 @@ class BookingStoreTest extends TestCase
         $this->assertSame($property->id, $payload['property_id']);
         $this->assertSame('Mansoria', $payload['property_title']);
         $this->assertSame('Draga', $payload['guest_name']);
-        $this->assertSame('2026-08-01', $payload['check_in']);
-        $this->assertSame('2026-08-03', $payload['check_out']);
+        $this->assertSame($startDate, $payload['check_in']);
+        $this->assertSame($endDate, $payload['check_out']);
         $this->assertArrayNotHasKey('guest_email', $payload);
     }
 
@@ -215,13 +223,15 @@ class BookingStoreTest extends TestCase
         $host = User::factory()->create();
         $guest = User::factory()->create(['name' => 'Draga']);
         $property = $this->createPropertyFor($host, ['title' => 'Mansoria']);
+        $startDate = now()->addDay()->toDateString();
+        $endDate = now()->addDays(3)->toDateString();
 
         $bookingResponse = $this
             ->actingAs($guest, 'sanctum')
             ->postJson('/api/bookings', [
                 'property_id' => $property->id,
-                'start_date' => '2026-08-01',
-                'end_date' => '2026-08-03',
+                'start_date' => $startDate,
+                'end_date' => $endDate,
             ])
             ->assertCreated();
 
@@ -234,8 +244,8 @@ class BookingStoreTest extends TestCase
             ->assertJsonPath('data.0.property_id', $property->id)
             ->assertJsonPath('data.0.property_title', 'Mansoria')
             ->assertJsonPath('data.0.guest_name', 'Draga')
-            ->assertJsonPath('data.0.check_in', '2026-08-01')
-            ->assertJsonPath('data.0.check_out', '2026-08-03')
+            ->assertJsonPath('data.0.check_in', $startDate)
+            ->assertJsonPath('data.0.check_out', $endDate)
             ->assertJsonPath('data.0.read', false);
     }
 

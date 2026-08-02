@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\AdminDashboardChartsController;
 use App\Http\Controllers\Api\AdminDashboardController;
 use App\Http\Controllers\Api\AdminGeographyController;
 use App\Http\Controllers\Api\AdminReportController;
@@ -64,6 +65,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/messages/{conversationId}',  [ConversationController::class, 'messages']);
     Route::post('/messages',                  [ConversationController::class, 'sendMessage']);
     Route::post('/reports',                   [ReportController::class, 'store']);
+    Route::get('/admin/dashboard/charts',     [AdminDashboardChartsController::class, 'index']);
     Route::get('/admin/dashboard/overview',   [AdminDashboardController::class, 'overview']);
     Route::get('/admin/dashboard/geography',  [AdminGeographyController::class, 'index']);
     Route::get('/admin/reports',              [AdminReportController::class, 'index']);
