@@ -1,6 +1,7 @@
 import { FiRefreshCw, FiShield } from 'react-icons/fi';
 import AdminAlertList from '../components/AdminAlertList';
 import AdminBookingSummary from '../components/AdminBookingSummary';
+import AdminChartsSection from '../components/AdminChartsSection';
 import AdminOverviewStats from '../components/AdminOverviewStats';
 import AdminQuickActions from '../components/AdminQuickActions';
 import AdminRecentActivity from '../components/AdminRecentActivity';
@@ -76,6 +77,7 @@ export default function AdminDashboard() {
 
       <AdminOverviewStats totals={totals} moderation={moderation} />
       <AdminAlertList alerts={alerts} />
+      <AdminChartsSection />
       <AdminBookingSummary bookings={bookings} moderation={moderation} />
       <AdminTrustSafetySummary trustAndSafety={trustAndSafety} />
       <AdminRecentActivity activity={recentActivity} />
