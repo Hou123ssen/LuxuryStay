@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\AdminBookingController;
 use App\Http\Controllers\Api\AdminDashboardChartsController;
 use App\Http\Controllers\Api\AdminDashboardController;
 use App\Http\Controllers\Api\AdminGeographyController;
@@ -70,6 +71,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/dashboard/charts',     [AdminDashboardChartsController::class, 'index']);
     Route::get('/admin/dashboard/overview',   [AdminDashboardController::class, 'overview']);
     Route::get('/admin/dashboard/geography',  [AdminGeographyController::class, 'index']);
+    Route::get('/admin/bookings',             [AdminBookingController::class, 'index']);
+    Route::get('/admin/bookings/{booking}',   [AdminBookingController::class, 'show']);
     Route::get('/admin/users',                [AdminUserController::class, 'index']);
     Route::get('/admin/users/{user}',         [AdminUserController::class, 'show']);
     Route::get('/admin/properties',           [AdminPropertyController::class, 'index']);
