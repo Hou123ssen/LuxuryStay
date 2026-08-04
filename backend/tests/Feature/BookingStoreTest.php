@@ -103,10 +103,13 @@ class BookingStoreTest extends TestCase
         $guestA = User::factory()->create();
         $guestB = User::factory()->create();
         $property = $this->createPropertyFor($host);
+        $acceptedStartDate = now()->addDays(5)->toDateString();
+        $acceptedEndDate = now()->addDays(7)->toDateString();
+        $newEndDate = now()->addDays(12)->toDateString();
 
         $this->createBookingFor($guestA, $property, [
-            'start_date' => '2026-08-01',
-            'end_date' => '2026-08-03',
+            'start_date' => $acceptedStartDate,
+            'end_date' => $acceptedEndDate,
             'status' => 'accepted',
         ]);
 
@@ -114,16 +117,16 @@ class BookingStoreTest extends TestCase
             ->actingAs($guestB, 'sanctum')
             ->postJson('/api/bookings', [
                 'property_id' => $property->id,
-                'start_date' => '2026-08-03',
-                'end_date' => '2026-08-08',
+                'start_date' => $acceptedEndDate,
+                'end_date' => $newEndDate,
             ])
             ->assertCreated();
 
         $this->assertDatabaseHas('bookings', [
             'user_id' => $guestB->id,
             'property_id' => $property->id,
-            'start_date' => '2026-08-03',
-            'end_date' => '2026-08-08',
+            'start_date' => $acceptedEndDate,
+            'end_date' => $newEndDate,
             'status' => 'pending',
         ]);
     }
@@ -134,10 +137,14 @@ class BookingStoreTest extends TestCase
         $guestA = User::factory()->create();
         $guestB = User::factory()->create();
         $property = $this->createPropertyFor($host);
+        $acceptedStartDate = now()->addDays(5)->toDateString();
+        $acceptedEndDate = now()->addDays(7)->toDateString();
+        $overlapStartDate = now()->addDays(6)->toDateString();
+        $overlapEndDate = now()->addDays(12)->toDateString();
 
         $this->createBookingFor($guestA, $property, [
-            'start_date' => '2026-08-01',
-            'end_date' => '2026-08-03',
+            'start_date' => $acceptedStartDate,
+            'end_date' => $acceptedEndDate,
             'status' => 'accepted',
         ]);
 
@@ -145,8 +152,8 @@ class BookingStoreTest extends TestCase
             ->actingAs($guestB, 'sanctum')
             ->postJson('/api/bookings', [
                 'property_id' => $property->id,
-                'start_date' => '2026-08-02',
-                'end_date' => '2026-08-08',
+                'start_date' => $overlapStartDate,
+                'end_date' => $overlapEndDate,
             ])
             ->assertUnprocessable()
             ->assertJsonPath('message', 'Property is already booked for these dates.');
@@ -154,8 +161,8 @@ class BookingStoreTest extends TestCase
         $this->assertDatabaseMissing('bookings', [
             'user_id' => $guestB->id,
             'property_id' => $property->id,
-            'start_date' => '2026-08-02',
-            'end_date' => '2026-08-08',
+            'start_date' => $overlapStartDate,
+            'end_date' => $overlapEndDate,
         ]);
     }
 

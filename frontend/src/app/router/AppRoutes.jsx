@@ -16,6 +16,7 @@ import Profile        from '../../features/profile/pages/Profile';
 import AdminLayout    from '../../features/admin/layouts/AdminLayout';
 import AdminDashboard from '../../features/admin/pages/AdminDashboard';
 import AdminGeography from '../../features/admin/pages/AdminGeography';
+import AdminBookings  from '../../features/admin/pages/AdminBookings';
 import AdminUsers     from '../../features/admin/pages/AdminUsers';
 import AdminProperties from '../../features/admin/pages/AdminProperties';
 import AdminReports   from '../../features/reports/pages/AdminReports';
@@ -64,6 +65,7 @@ export default function AppRoutes() {
       }>
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/admin/geography" element={<AdminGeography />} />
+        <Route path="/admin/bookings" element={<AdminBookings />} />
         <Route path="/admin/users" element={<AdminUsers />} />
         <Route path="/admin/properties" element={<AdminProperties />} />
         <Route path="/admin/reports" element={<AdminReports />} />

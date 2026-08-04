@@ -199,7 +199,7 @@ class AdminUsersManagementTest extends TestCase
     public function test_sorting_options_work(): void
     {
         Carbon::setTestNow('2026-08-02 12:00:00');
-        $admin = $this->admin();
+        $admin = $this->admin(['name' => 'Zzz Admin']);
         $admin->forceFill(['created_at' => now()->subDays(10), 'updated_at' => now()->subDays(10)])->save();
         $alpha = User::factory()->create(['name' => 'Alpha', 'created_at' => now()->subDays(2)]);
         $zulu = User::factory()->create(['name' => 'Zulu', 'created_at' => now()->subDay()]);
@@ -307,9 +307,9 @@ class AdminUsersManagementTest extends TestCase
         $this->assertStringNotContainsString('nested-owner@example.test', $json);
     }
 
-    private function admin(): User
+    private function admin(array $attributes = []): User
     {
-        return User::factory()->create(['role' => 'admin']);
+        return User::factory()->create(array_merge(['role' => 'admin'], $attributes));
     }
 
     private function assertNames(string $url, User $admin, array $expectedNames): void
